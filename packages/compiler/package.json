@@ -1,0 +1,21 @@
+{
+  "name": "@visualmd/compiler",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Fault-tolerant token-efficient AST parser and compiler for VisualMD markup",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "marked": "^15.0.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  },
+  "author": "Darshan Aguru <https://thisdarshiii.in>",
+  "homepage": "https://thisdarshiii.in",
+  "license": "MIT"
+}
