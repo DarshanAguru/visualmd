@@ -1,13 +1,9 @@
-# VisualMD (v1.0.1)
-
+# VisualMD
 > **The Token-Efficient Interactive Visual Markdown Workspace for AI-Era Knowledge Workers & Engineers.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: >=22](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
-[![Tests: 17 Passing](https://img.shields.io/badge/Tests-17%2F17%20Passing-success.svg)](#-automated-tests)
-[![Local-First](https://img.shields.io/badge/Architecture-100%25%20Local%20%7C%20Zero%20Telemetry-emerald.svg)](#-privacy--enterprise-security)
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
-
+[![Version: v1.0.1](https://img.shields.io/badge/Version-v1.0.1-purple.svg)]()
 ---
 
 ## ⚡ Why VisualMD?

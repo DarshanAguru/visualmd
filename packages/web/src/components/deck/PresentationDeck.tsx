@@ -134,77 +134,6 @@ const THEME_OPTIONS: ThemeOption[] = [
   },
 ];
 
-function splitMarkdownIntoSlides(content: string): Array<{ title: string; content: string }> {
-  const lines = content.split(/\r?\n/);
-  const slides: Array<{ title: string; content: string }> = [];
-  let currentTitle = '';
-  let currentLines: string[] = [];
-  let inCodeBlock = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    // Preserve code blocks completely intact without splitting on code comments (#)
-    if (/^(```|~~~)/.test(trimmed)) {
-      inCodeBlock = !inCodeBlock;
-      currentLines.push(line);
-      continue;
-    }
-
-    if (!inCodeBlock) {
-      const isDivider = /^(?:---|\*\*\*)\s*$/.test(trimmed);
-      const headingMatch = trimmed.match(/^(#{1,2})\s+(.+)$/);
-
-      if (isDivider) {
-        if (currentLines.length > 0) {
-          const body = currentLines.join('\n').trim();
-          if (body) {
-            slides.push({
-              title: currentTitle || 'Overview',
-              content: body,
-            });
-          }
-          currentLines = [];
-          currentTitle = '';
-        }
-        continue;
-      }
-
-      if (headingMatch && currentLines.length > 0) {
-        const body = currentLines.join('\n').trim();
-        if (body) {
-          slides.push({
-            title: currentTitle || headingMatch[2].trim(),
-            content: body,
-          });
-        }
-        currentTitle = headingMatch[2].trim();
-        currentLines = [line];
-        continue;
-      }
-
-      if (headingMatch && !currentTitle) {
-        currentTitle = headingMatch[2].trim();
-      }
-    }
-
-    currentLines.push(line);
-  }
-
-  if (currentLines.length > 0) {
-    const body = currentLines.join('\n').trim();
-    if (body) {
-      slides.push({
-        title: currentTitle || 'Overview',
-        content: body,
-      });
-    }
-  }
-
-  return slides;
-}
-
 interface PresentationDeckProps {
   document: VmdDocument;
   theme?: ThemeType;
@@ -230,6 +159,107 @@ interface Stroke {
   color: string;
   width: number;
   isEraser?: boolean;
+}
+
+/**
+ * Cohesively groups document nodes (markdown and interactive widgets) into logical presentation slides.
+ * Major headings (# or ##) and horizontal dividers (---) define slide boundaries.
+ * Widgets immediately following a heading or section are grouped together with that section instead of
+ * creating orphaned slides where one slide only has the heading and the next has the widget.
+ */
+function buildPresentationSlides(doc: VmdDocument): SlideItem[] {
+  const slides: SlideItem[] = [];
+  let currentTitle = doc.title || 'Overview';
+  let currentNodes: VmdNode[] = [];
+  let slideCounter = 0;
+
+  function flushSlide(nextTitle?: string) {
+    // Filter out whitespace-only or divider-only markdown nodes
+    const activeNodes = currentNodes.filter((n) => {
+      if (n.type === 'markdown') {
+        const cleaned = (n.content || '').replace(/^---+\s*$/gm, '').trim();
+        return cleaned.length > 0;
+      }
+      return true;
+    });
+
+    if (activeNodes.length > 0) {
+      slideCounter++;
+      slides.push({
+        id: `slide-${slideCounter}`,
+        title: currentTitle,
+        nodes: activeNodes,
+      });
+    }
+    currentNodes = [];
+    if (nextTitle) {
+      currentTitle = nextTitle;
+    }
+  }
+
+  for (let i = 0; i < doc.nodes.length; i++) {
+    const node = doc.nodes[i];
+
+    if (node.type === 'markdown') {
+      const lines = node.content.split(/\r?\n/);
+      let buffer: string[] = [];
+      let inCodeBlock = false;
+
+      for (let j = 0; j < lines.length; j++) {
+        const line = lines[j];
+        const trimmed = line.trim();
+
+        // Preserve code blocks completely intact without interpreting `#` or `---` inside them
+        if (/^(?:```|~~~)/.test(trimmed)) {
+          inCodeBlock = !inCodeBlock;
+          buffer.push(line);
+          continue;
+        }
+
+        if (!inCodeBlock) {
+          const isDivider = /^(?:---|\*\*\*)\s*$/.test(trimmed);
+          const headingMatch = trimmed.match(/^(#{1,2})\s+(.+)$/);
+
+          if (isDivider) {
+            if (buffer.length > 0) {
+              currentNodes.push({ id: `${node.id}-part-${j}`, type: 'markdown', content: buffer.join('\n') } as VmdNode);
+              buffer = [];
+            }
+            flushSlide();
+            continue;
+          }
+
+          if (headingMatch) {
+            if (buffer.length > 0) {
+              currentNodes.push({ id: `${node.id}-part-${j}`, type: 'markdown', content: buffer.join('\n') } as VmdNode);
+              buffer = [];
+            }
+            const headingText = headingMatch[2].trim();
+            // Start a new slide with this heading as title
+            flushSlide(headingText);
+            continue;
+          }
+        }
+
+        buffer.push(line);
+      }
+
+      if (buffer.length > 0) {
+        currentNodes.push({ id: `${node.id}-end`, type: 'markdown', content: buffer.join('\n') } as VmdNode);
+      }
+    } else {
+      // Interactive widget node (tabs, stepper, canvas, snippet, quiz, metrics, callout)
+      // If we don't have a distinct section title yet and the widget has a title, adopt it
+      if ((!currentTitle || currentTitle === doc.title) && ((node as any).title || (node as any).caption)) {
+        currentTitle = (node as any).title || (node as any).caption;
+      }
+      currentNodes.push(node);
+    }
+  }
+
+  flushSlide();
+
+  return slides.length > 0 ? slides : [{ id: 'slide-0', title: doc.title, nodes: doc.nodes }];
 }
 
 export const PresentationDeck: React.FC<PresentationDeckProps> = ({
@@ -272,62 +302,21 @@ export const PresentationDeck: React.FC<PresentationDeckProps> = ({
   const isDarkTheme = ['dark', 'obsidian', 'midnight', 'tokyo', 'dracula', 'forest', 'nord', 'retro'].includes(activeTheme);
   const currentThemeObj = THEME_OPTIONS.find((t) => t.id === activeTheme) || THEME_OPTIONS[0];
 
-  // Generate initial slides from document nodes
+  // Generate cohesive slides from document nodes
   const initialSlides = React.useMemo<SlideItem[]>(() => {
-    const list: SlideItem[] = [];
-
-    // Executive summary slide if document has summary widgets (metrics or callout)
-    const firstMetrics = doc.nodes.find((n) => n.type === 'metrics');
-    const firstCallout = doc.nodes.find((n) => n.type === 'callout');
-    if (firstMetrics || firstCallout) {
-      list.push({
-        id: 'slide-title',
-        title: doc.title,
-        nodes: [firstMetrics, firstCallout].filter(Boolean) as VmdNode[],
-      });
-    }
-
-    // Content slides
-    doc.nodes.forEach((node, idx) => {
-      if (node.type === 'stepper') {
-        list.push({ id: `slide-stepper-${idx}`, title: (node as any).title || 'Execution Flow', nodes: [node] });
-      } else if (node.type === 'canvas') {
-        list.push({ id: `slide-canvas-${idx}`, title: (node as any).title || 'Interactive Simulation', nodes: [node] });
-      } else if (node.type === 'tabs') {
-        list.push({ id: `slide-tabs-${idx}`, title: 'Architectural Comparison', nodes: [node] });
-      } else if (node.type === 'snippet') {
-        list.push({ id: `slide-snippet-${idx}`, title: (node as any).title || 'Code Implementation', nodes: [node] });
-      } else if (node.type === 'quiz') {
-        list.push({ id: `slide-quiz-${idx}`, title: 'Active Knowledge Check', nodes: [node] });
-      } else if (node.type === 'metrics') {
-        if (!firstMetrics || node !== firstMetrics) {
-          list.push({ id: `slide-metrics-${idx}`, title: 'Key Metrics & Analytics', nodes: [node] });
-        }
-      } else if (node.type === 'callout') {
-        if (!firstCallout || node !== firstCallout) {
-          list.push({ id: `slide-callout-${idx}`, title: (node as any).title || 'Executive Summary', nodes: [node] });
-        }
-      } else if (node.type === 'markdown') {
-        const subSlides = splitMarkdownIntoSlides(node.content);
-        if (subSlides.length > 0) {
-          subSlides.forEach((sec, sIdx) => {
-            list.push({
-              id: `slide-md-${idx}-${sIdx}`,
-              title: sec.title,
-              nodes: [{ id: `${node.id}-slide-${sIdx}`, type: 'markdown', content: sec.content } as VmdNode],
-            });
-          });
-        } else {
-          list.push({ id: `slide-md-${idx}`, title: doc.title, nodes: [node] });
-        }
-      }
-    });
-
-    return list.length > 0 ? list : [{ id: 'slide-0', title: doc.title, nodes: doc.nodes }];
+    return buildPresentationSlides(doc);
   }, [doc]);
 
   const [slides, setSlides] = useState<SlideItem[]>(initialSlides);
+
+  // Sync slides if document updates
+  useEffect(() => {
+    setSlides(buildPresentationSlides(doc));
+    setCurrentSlideIdx(0);
+  }, [doc]);
+
   const [currentSlideIdx, setCurrentSlideIdx] = useState(0);
+
 
   // Presenter Tools State
   const [isDrawActive, setIsDrawActive] = useState(false);
