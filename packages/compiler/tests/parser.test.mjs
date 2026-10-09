@@ -189,3 +189,39 @@ $SNIPPET$E`;
   assert.equal(snippet.title, 'Service Worker & Pool+Manager');
   assert.equal(snippet.highlight, '1,2,3');
 });
+
+test('VisualMD Compiler (v1.0.1) - Malformed URI and unescaped percent in parameters', () => {
+  const input = `$METRICS$S?title=Q3%20Performance%20(100%25%20growth)&val=50%
+CPU: 45% | RAM: 100%
+$METRICS$E`;
+
+  // Should never throw URIError: URI malformed
+  const doc = parseVisualMD(input);
+  assert.equal(doc.nodes.length, 1);
+  assert.equal(doc.nodes[0].type, 'metrics');
+  const metrics = doc.nodes[0];
+  assert.equal(metrics.items.length, 2);
+  assert.equal(metrics.items[1].value, '100%');
+});
+
+test('VisualMD Compiler (v1.0.1) - Case-insensitive macro tags & checklist quiz options', () => {
+  const input = `$quiz$S?q=Case+Insensitive+Quiz
+- [ ] Option A
+- [x] Option B
+* [ ] Option C
+$explanation
+Correct is B.
+$quiz$E`;
+
+  const doc = parseVisualMD(input);
+  assert.equal(doc.nodes.length, 1);
+  const quiz = doc.nodes[0];
+  assert.equal(quiz.type, 'quiz');
+  assert.equal(quiz.question, 'Case Insensitive Quiz');
+  assert.equal(quiz.options.length, 3);
+  assert.equal(quiz.options[0].isCorrect, false);
+  assert.equal(quiz.options[1].isCorrect, true);
+  assert.equal(quiz.options[2].isCorrect, false);
+  assert.equal(quiz.explanation, 'Correct is B.');
+});
+

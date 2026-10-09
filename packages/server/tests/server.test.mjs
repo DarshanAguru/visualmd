@@ -488,3 +488,52 @@ test('Server - Examples folder seeding and folder cascade deletion', async () =>
   }
 });
 
+test('Server (v1.0.1) - Health Version & Prefix FTS5 Search', async () => {
+  const tmpDb = path.join(os.tmpdir(), `vmd-test-v101-${Date.now()}.db`);
+  const db = new VisualMDDatabase(tmpDb);
+  const app = createServer(db);
+
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, () => resolve(s));
+  });
+  const port = server.address().port;
+  const baseUrl = `http://localhost:${port}`;
+
+  try {
+    // 1. Check health returns version 1.0.1
+    const healthRes = await fetch(`${baseUrl}/api/health`);
+    assert.equal(healthRes.status, 200);
+    const health = await healthRes.json();
+    assert.equal(health.version, '1.0.1');
+
+    // 2. Test prefix search in database
+    db.createDocument('Distributed Consensus With Raft', 'Leader election and log replication algorithms in Raft.');
+    db.createDocument('Kafka Streaming Guide', 'Kafka message partitioning and zero copy performance.');
+
+    // Partial term "lead" matches "Leader"
+    const searchPrefix = db.search('lead');
+    assert.ok(searchPrefix.length >= 1);
+    assert.match(searchPrefix[0].title, /Raft/);
+
+    // Partial term "stream" matches "streaming"
+    const searchStream = db.search('stream');
+    assert.ok(searchStream.length >= 1);
+    assert.match(searchStream[0].title, /Kafka/);
+
+    // Multiple terms with prefix
+    const searchMulti = db.search('Kafka mess');
+    assert.ok(searchMulti.length >= 1);
+    assert.match(searchMulti[0].title, /Kafka/);
+
+  } finally {
+    server.close();
+    db.close();
+    if (fs.existsSync(tmpDb)) fs.unlinkSync(tmpDb);
+    const walFile = `${tmpDb}-wal`;
+    const shmFile = `${tmpDb}-shm`;
+    if (fs.existsSync(walFile)) fs.unlinkSync(walFile);
+    if (fs.existsSync(shmFile)) fs.unlinkSync(shmFile);
+  }
+});
+
+

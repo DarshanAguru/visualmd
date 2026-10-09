@@ -384,28 +384,51 @@ export class VisualMDDatabase {
     this.db.prepare('DELETE FROM annotations WHERE id = ?').run(id);
   }
 
-  // Full Text Search
+  // Full Text Search with prefix matching & safe fallback
   public search(query: string): Array<{ id: string; title: string; snippet: string }> {
     if (!query || !query.trim()) return [];
-    const cleanQuery = query.trim().replace(/'/g, "''");
+    const trimmed = query.trim();
+
+    // 1. Try prefix FTS5 search (e.g. "kafk"* matches "Kafka")
     try {
-      const stmt = this.db.prepare(`
-        SELECT id, title, snippet(docs_fts, 2, '<b>', '</b>', '...', 25) as snippet
-        FROM docs_fts
-        WHERE docs_fts MATCH ?
-        LIMIT 20
-      `);
-      return stmt.all(cleanQuery) as unknown as Array<{ id: string; title: string; snippet: string }>;
+      const tokens = trimmed
+        .replace(/[^\w\s-]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+
+      if (tokens.length > 0) {
+        const ftsQuery = tokens
+          .map((t, idx) => (idx === tokens.length - 1 ? `"${t}"*` : `"${t}"`))
+          .join(' ');
+
+        const stmt = this.db.prepare(`
+          SELECT id, title, snippet(docs_fts, 2, '<b>', '</b>', '...', 25) as snippet
+          FROM docs_fts
+          WHERE docs_fts MATCH ?
+          LIMIT 20
+        `);
+        const results = stmt.all(ftsQuery) as unknown as Array<{ id: string; title: string; snippet: string }>;
+        if (results && results.length > 0) {
+          return results;
+        }
+      }
     } catch {
-      // Fallback to LIKE if query syntax fails in FTS5
+      // Fall through to LIKE search below
+    }
+
+    // 2. Fallback to LIKE if FTS5 has no hits or syntax fails
+    try {
       const fallbackStmt = this.db.prepare(`
         SELECT id, title, substr(content, 1, 120) as snippet
         FROM documents
         WHERE title LIKE ? OR content LIKE ?
         LIMIT 20
       `);
-      const likeQuery = `%${cleanQuery}%`;
+      const cleanLike = trimmed.replace(/[%_]/g, '\\$&');
+      const likeQuery = `%${cleanLike}%`;
       return fallbackStmt.all(likeQuery, likeQuery) as unknown as Array<{ id: string; title: string; snippet: string }>;
+    } catch {
+      return [];
     }
   }
 

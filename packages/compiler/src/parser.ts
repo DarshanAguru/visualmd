@@ -17,6 +17,14 @@ import {
   ParseOptions,
 } from './types.js';
 
+function safeDecode(str: string): string {
+  try {
+    return decodeURIComponent(str.replace(/\+/g, ' ')).trim();
+  } catch {
+    return str.replace(/\+/g, ' ').trim();
+  }
+}
+
 function parseParams(paramString: string): Record<string, string> {
   const result: Record<string, string> = {};
   if (!paramString || !paramString.trim()) return result;
@@ -28,11 +36,11 @@ function parseParams(paramString: string): Record<string, string> {
     if (!pair) continue;
     const eqIdx = pair.indexOf('=');
     if (eqIdx === -1) {
-      const key = decodeURIComponent(pair.replace(/\+/g, ' ')).trim();
+      const key = safeDecode(pair);
       if (key) result[key] = 'true';
     } else {
-      const key = decodeURIComponent(pair.slice(0, eqIdx).replace(/\+/g, ' ')).trim();
-      const val = decodeURIComponent(pair.slice(eqIdx + 1).replace(/\+/g, ' ')).trim();
+      const key = safeDecode(pair.slice(0, eqIdx));
+      const val = safeDecode(pair.slice(eqIdx + 1));
       if (key) result[key] = val;
     }
   }
@@ -54,7 +62,7 @@ export function parseVisualMD(rawText: string, options: ParseOptions = {}): VmdD
   function cleanMarkdownLines(rawLines: string[]): string[] {
     return rawLines.filter((l) => {
       const trimmed = l.trim();
-      if (/^\$[A-Z_]+(\$S|\$E)/.test(trimmed)) return false;
+      if (/^\$[A-Z_]+(\$S|\$E)/i.test(trimmed)) return false;
       if (/^\$TAB(\?|$)/i.test(trimmed)) return false;
       if (/^\$STEP@\d+/i.test(trimmed)) return false;
       if (/^\$EXPLANATION/i.test(trimmed)) return false;
@@ -283,7 +291,7 @@ export function parseVisualMD(rawText: string, options: ParseOptions = {}): VmdD
         const explanationLines: string[] = [];
 
         for (const line of block.rawLines) {
-          if (line.trim().startsWith('$EXPLANATION')) {
+          if (line.trim().toUpperCase().startsWith('$EXPLANATION')) {
             inExplanation = true;
             continue;
           }
@@ -293,7 +301,7 @@ export function parseVisualMD(rawText: string, options: ParseOptions = {}): VmdD
             continue;
           }
 
-          const optMatch = line.match(/^\[([ xX])\]\s*(.*)$/);
+          const optMatch = line.match(/^(?:[-*+]\s+)?\[([ xX])\]\s*(.*)$/);
           if (optMatch) {
             options.push({
               isCorrect: optMatch[1].toLowerCase() === 'x',
@@ -351,9 +359,9 @@ export function parseVisualMD(rawText: string, options: ParseOptions = {}): VmdD
     }
 
     // Check for start of VisualMD macro tag: $KEYWORD$S(?params)?
-    const startMatch = trimmed.match(/^\$([A-Z_]+)\$S(?:\?(.*))?$/);
+    const startMatch = trimmed.match(/^\$([A-Z_]+)\$S(?:\?(.*))?$/i);
     if (startMatch) {
-      const blockType = startMatch[1] as ActiveBlockType;
+      const blockType = startMatch[1].toUpperCase() as ActiveBlockType;
       const validBlockTypes: ActiveBlockType[] = [
         'SNIPPET',
         'STEPPER',
@@ -386,8 +394,8 @@ export function parseVisualMD(rawText: string, options: ParseOptions = {}): VmdD
 
     // Check for end of VisualMD macro tag: $KEYWORD$E
     if (activeBlock) {
-      const endMatch = trimmed.match(/^\$([A-Z_]+)\$E$/);
-      if (endMatch && endMatch[1] === activeBlock.type) {
+      const endMatch = trimmed.match(/^\$([A-Z_]+)\$E$/i);
+      if (endMatch && endMatch[1].toUpperCase() === activeBlock.type) {
         finalizeBlock(activeBlock);
         activeBlock = null;
         continue;
@@ -432,21 +440,22 @@ export function validateVisualMD(rawText: string): { isValid: boolean; errors: s
 
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
-    const startMatch = trimmed.match(/^\$([A-Z_]+)\$S(?:\?.*)?$/);
+    const startMatch = trimmed.match(/^\$([A-Z_]+)\$S(?:\?.*)?$/i);
     if (startMatch) {
-      openStack.push({ type: startMatch[1], line: i + 1 });
+      openStack.push({ type: startMatch[1].toUpperCase(), line: i + 1 });
       continue;
     }
 
-    const endMatch = trimmed.match(/^\$([A-Z_]+)\$E$/);
+    const endMatch = trimmed.match(/^\$([A-Z_]+)\$E$/i);
     if (endMatch) {
+      const endType = endMatch[1].toUpperCase();
       if (openStack.length === 0) {
-        errors.push(`Line ${i + 1}: Found end tag $${endMatch[1]}$E without matching start tag.`);
+        errors.push(`Line ${i + 1}: Found end tag $${endType}$E without matching start tag.`);
       } else {
         const last = openStack.pop()!;
-        if (last.type !== endMatch[1]) {
+        if (last.type !== endType) {
           errors.push(
-            `Line ${i + 1}: Mismatched end tag $${endMatch[1]}$E for $${last.type}$S opened on line ${last.line}.`
+            `Line ${i + 1}: Mismatched end tag $${endType}$E for $${last.type}$S opened on line ${last.line}.`
           );
         }
       }

@@ -1,4 +1,4 @@
-# VisualMD (v1.0.0)
+# VisualMD (v1.0.1)
 
 > **The Token-Efficient Interactive Visual Markdown Workspace for AI-Era Knowledge Workers & Engineers.**
 

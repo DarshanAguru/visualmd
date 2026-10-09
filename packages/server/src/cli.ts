@@ -178,6 +178,9 @@ export async function runCLI() {
         console.log('\n[VisualMD] No active VisualMD processes running.\n');
       }
       process.exit(0);
+    } else if (arg === '--version' || arg === '-v' || arg === 'version') {
+      console.log('visualmd v1.0.1');
+      process.exit(0);
     } else if (arg === '--port' || arg === '-p') {
       port = parseInt(args[++i], 10) || 9669;
     } else if (arg === '--no-open') {
@@ -204,6 +207,7 @@ Options:
   -d, --data-dir <path>    Custom directory for storing user readmes (default: ./data)
   --no-open                Do not automatically open the browser
   --db <path>              Custom SQLite database file path
+  -v, --version            Display installed VisualMD version
   -h, --help               Show this help message
       `);
       process.exit(0);
@@ -312,6 +316,9 @@ Options:
 
       const existing = db.getDocumentByFilePath(targetPath);
       if (existing) {
+        if (existing.content !== content) {
+          db.updateDocument(existing.id, { content, title: docTitle });
+        }
         targetDocId = existing.id;
       } else {
         const doc = db.createDocument(docTitle, content, null, targetPath);
