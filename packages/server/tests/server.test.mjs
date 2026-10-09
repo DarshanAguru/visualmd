@@ -488,8 +488,8 @@ test('Server - Examples folder seeding and folder cascade deletion', async () =>
   }
 });
 
-test('Server (v1.0.1) - Health Version & Prefix FTS5 Search', async () => {
-  const tmpDb = path.join(os.tmpdir(), `vmd-test-v101-${Date.now()}.db`);
+test('Server (v1.0.2) - Health Version & Prefix FTS5 Search', async () => {
+  const tmpDb = path.join(os.tmpdir(), `vmd-test-v102-${Date.now()}.db`);
   const db = new VisualMDDatabase(tmpDb);
   const app = createServer(db);
 
@@ -500,11 +500,11 @@ test('Server (v1.0.1) - Health Version & Prefix FTS5 Search', async () => {
   const baseUrl = `http://localhost:${port}`;
 
   try {
-    // 1. Check health returns version 1.0.1
+    // 1. Check health returns version 1.0.2
     const healthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(healthRes.status, 200);
     const health = await healthRes.json();
-    assert.equal(health.version, '1.0.1');
+    assert.equal(health.version, '1.0.2');
 
     // 2. Test prefix search in database
     db.createDocument('Distributed Consensus With Raft', 'Leader election and log replication algorithms in Raft.');

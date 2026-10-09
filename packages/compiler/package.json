@@ -1,6 +1,6 @@
 {
   "name": "@visualmd/compiler",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "description": "Fault-tolerant token-efficient AST parser and compiler for VisualMD markup",
   "main": "dist/index.js",

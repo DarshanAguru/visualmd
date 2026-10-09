@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: >=22](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
-[![Version: v1.0.1](https://img.shields.io/badge/Version-v1.0.1-purple.svg)](SECURITY)
+[![Version: v1.0.2](https://img.shields.io/badge/Version-v1.0.2-purple.svg)](SECURITY)
 ---
 
 ## ⚡ Why VisualMD?
