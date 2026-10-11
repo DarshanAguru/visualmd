@@ -261,9 +261,30 @@ test('Server - Prompts API & Folders API Verification', async () => {
     const folder = await folderRes.json();
     assert.equal(folder.name, 'System Architecture');
 
+    // 5b. Folders API: rename folder
+    const renameRes = await fetch(`${baseUrl}/api/folders/${folder.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Distributed Systems' }),
+    });
+    assert.equal(renameRes.status, 200);
+    const renamedFolder = await renameRes.json();
+    assert.equal(renamedFolder.name, 'Distributed Systems');
+
+    // 5c. Folders API: creating duplicate folder returns existing
+    const dupRes = await fetch(`${baseUrl}/api/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'distributed systems' }),
+    });
+    assert.equal(dupRes.status, 201);
+    const dupFolder = await dupRes.json();
+    assert.equal(dupFolder.id, folder.id);
+
     const listFoldersRes = await fetch(`${baseUrl}/api/folders`);
     const folders = await listFoldersRes.json();
     assert.equal(folders.length, 1);
+    assert.equal(folders[0].name, 'Distributed Systems');
 
     const deleteFolderRes = await fetch(`${baseUrl}/api/folders/${folder.id}`, { method: 'DELETE' });
     assert.equal(deleteFolderRes.status, 200);
@@ -488,8 +509,8 @@ test('Server - Examples folder seeding and folder cascade deletion', async () =>
   }
 });
 
-test('Server (v1.0.2) - Health Version & Prefix FTS5 Search', async () => {
-  const tmpDb = path.join(os.tmpdir(), `vmd-test-v102-${Date.now()}.db`);
+test('Server (v1.0.22) - Health Version & Prefix FTS5 Search', async () => {
+  const tmpDb = path.join(os.tmpdir(), `vmd-test-v1022-${Date.now()}.db`);
   const db = new VisualMDDatabase(tmpDb);
   const app = createServer(db);
 
@@ -500,11 +521,11 @@ test('Server (v1.0.2) - Health Version & Prefix FTS5 Search', async () => {
   const baseUrl = `http://localhost:${port}`;
 
   try {
-    // 1. Check health returns version 1.0.2
+    // 1. Check health returns version 1.0.22
     const healthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(healthRes.status, 200);
     const health = await healthRes.json();
-    assert.equal(health.version, '1.0.2');
+    assert.equal(health.version, '1.0.22');
 
     // 2. Test prefix search in database
     db.createDocument('Distributed Consensus With Raft', 'Leader election and log replication algorithms in Raft.');
@@ -524,6 +545,29 @@ test('Server (v1.0.2) - Health Version & Prefix FTS5 Search', async () => {
     const searchMulti = db.search('Kafka mess');
     assert.ok(searchMulti.length >= 1);
     assert.match(searchMulti[0].title, /Kafka/);
+
+    // 3. Test component-level note & table_cell annotation
+    const testDoc = db.createDocument('Test Annotations', '# Notes Test');
+    const annoRes = await fetch(`${baseUrl}/api/docs/${testDoc.id}/annotation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        node_id: 'node-stepper-1',
+        selected_text: '', // Component-level comment!
+        note: 'Executive architecture comment',
+        color: 'purple',
+        table_cell: '0:1:2',
+      }),
+    });
+    assert.equal(annoRes.status, 201);
+    const annoData = await annoRes.json();
+    assert.equal(annoData.note, 'Executive architecture comment');
+    assert.equal(annoData.table_cell, '0:1:2');
+    assert.equal(annoData.color, 'purple');
+
+    const fetchedDoc = db.getDocumentById(testDoc.id);
+    assert.equal(fetchedDoc.annotations.length, 1);
+    assert.equal(fetchedDoc.annotations[0].table_cell, '0:1:2');
 
   } finally {
     server.close();

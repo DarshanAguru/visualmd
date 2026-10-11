@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: >=22](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
-[![Version: v1.0.2](https://img.shields.io/badge/Version-v1.0.2-purple.svg)](SECURITY)
+[![Version: v1.0.22](https://img.shields.io/badge/Version-v1.0.22-purple.svg)](SECURITY)
 ---
 
 ## ⚡ Why VisualMD?
@@ -237,9 +237,9 @@ Total: 14 tests, 14 passing, 0 failing
 
 ## 👥 Authors & Attribution
 
-VisualMD was architected and built through a pair-programming partnership between:
-- **[Darshan Aguru](https://thisdarshiii.in)** — Lead Creator & Systems Architect
-- **Antigravity** — Advanced Agentic Coding Pair Programmer (Google DeepMind)
+VisualMD was architected and built through a pair-programming between:
+- **[Darshan Aguru](https://thisdarshiii.in)** — Lead Creator & Systems Architect & Code Reviever/Orchestrator
+- **[Antigravity](https://antigravity.google/)** — Advanced Agentic Coding Programmer (Google Gemini)
 
 Designed with passion for technical education, zero telemetry, and token-efficient AI workflows.
 
@@ -247,7 +247,7 @@ Designed with passion for technical education, zero telemetry, and token-efficie
 
 ## 📄 License & Copyright
 
-Copyright © 2026 **[Darshan Aguru](https://thisdarshiii.in)** & **Antigravity** (Google DeepMind). All rights reserved.
+Copyright © 2026 **[Darshan Aguru](https://thisdarshiii.in)**. All rights reserved.
 
 Released under the [MIT License](LICENSE).
 Code of Conduct follows [Contributor Covenant](CODE_OF_CONDUCT.md).

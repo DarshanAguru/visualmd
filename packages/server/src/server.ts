@@ -38,7 +38,7 @@ export function createServer(
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
       status: 'ok',
-      version: '1.0.2',
+      version: '1.0.22',
       dbPath: db.dbPath,
       dataDir: dataDir ? path.resolve(dataDir) : null,
     });
@@ -99,6 +99,51 @@ export function createServer(
     }
     const folder = db.createFolder(name.trim(), parent_id || null);
     res.status(201).json(folder);
+  });
+
+  app.put('/api/folders/:id', async (req: Request, res: Response) => {
+    const folderId = String(req.params.id);
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      res.status(400).json({ error: 'Folder name is required' });
+      return;
+    }
+    const newName = name.trim();
+    const existingFolder = db.getFolderById(folderId);
+    if (!existingFolder) {
+      res.status(404).json({ error: 'Folder not found' });
+      return;
+    }
+
+    const oldName = existingFolder.name;
+    const updatedFolder = db.renameFolder(folderId, newName);
+
+    // Physically rename directory in dataDir if it exists
+    if (dataDir && oldName !== newName) {
+      const resolvedDataDir = path.resolve(dataDir);
+      const oldSubDir = path.join(resolvedDataDir, oldName);
+      const newSubDir = path.join(resolvedDataDir, newName);
+
+      if (fs.existsSync(oldSubDir) && oldSubDir.startsWith(resolvedDataDir)) {
+        try {
+          fs.renameSync(oldSubDir, newSubDir);
+          // Update file_paths of docs inside this folder
+          const docs = db.getDocuments(folderId);
+          for (const doc of docs) {
+            if (doc.file_path && doc.file_path.startsWith(oldSubDir)) {
+              const updatedPath = path.join(newSubDir, path.basename(doc.file_path));
+              db.updateDocument(doc.id, { file_path: updatedPath });
+            }
+          }
+        } catch (err) {
+          console.error('[VisualMD] Failed to rename physical directory:', err);
+        }
+      }
+
+      await autoCommitDataChange(dataDir, `Rename folder "${oldName}" to "${newName}"`);
+    }
+
+    res.json(updatedFolder);
   });
 
   app.delete('/api/folders/:id', async (req: Request, res: Response) => {
@@ -314,18 +359,20 @@ export function createServer(
 
   // Annotations API
   app.post('/api/docs/:id/annotation', (req: Request, res: Response) => {
-    const { node_id, selected_text, note, color, occurrence_index } = req.body;
-    if (!node_id || !selected_text || !note) {
-      res.status(400).json({ error: 'node_id, selected_text, and note are required' });
+    const { node_id, selected_text, note, color, occurrence_index, table_cell } = req.body;
+    // node_id and either note or selected_text are required
+    if (!node_id || (!selected_text && !note)) {
+      res.status(400).json({ error: 'node_id and at least one of selected_text or note are required' });
       return;
     }
     const annotation = db.addAnnotation(
       String(req.params.id),
       node_id,
-      selected_text,
-      note,
+      selected_text || '',
+      note || '',
       color || 'yellow',
-      typeof occurrence_index === 'number' ? occurrence_index : 0
+      typeof occurrence_index === 'number' ? occurrence_index : 0,
+      table_cell || null
     );
     res.status(201).json(annotation);
   });

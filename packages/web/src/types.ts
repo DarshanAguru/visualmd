@@ -59,6 +59,7 @@ export interface Annotation {
   color: string;
   note: string;
   occurrence_index?: number;
+  table_cell?: string | null;
   created_at: string;
 }
 

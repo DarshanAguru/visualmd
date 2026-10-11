@@ -60,8 +60,14 @@ export function parseVisualMD(rawText: string, options: ParseOptions = {}): VmdD
   let nodeCounter = 0;
 
   function cleanMarkdownLines(rawLines: string[]): string[] {
+    let inFence = false;
     return rawLines.filter((l) => {
       const trimmed = l.trim();
+      if (/^(?:```|~~~)/.test(trimmed)) {
+        inFence = !inFence;
+        return true;
+      }
+      if (inFence) return true;
       if (/^\$[A-Z_]+(\$S|\$E)/i.test(trimmed)) return false;
       if (/^\$TAB(\?|$)/i.test(trimmed)) return false;
       if (/^\$STEP@\d+/i.test(trimmed)) return false;
@@ -326,9 +332,24 @@ export function parseVisualMD(rawText: string, options: ParseOptions = {}): VmdD
     }
   }
 
+  let inMarkdownCodeFence = false;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
+
+    // Check code fence state when outside active VisualMD blocks
+    if (!activeBlock) {
+      if (/^(?:```|~~~)/.test(trimmed)) {
+        inMarkdownCodeFence = !inMarkdownCodeFence;
+        currentMarkdownBuffer.push(line);
+        continue;
+      }
+      if (inMarkdownCodeFence) {
+        currentMarkdownBuffer.push(line);
+        continue;
+      }
+    }
 
     // Check for document title if not set yet
     if (!titleFound && !activeBlock) {
@@ -437,9 +458,20 @@ export function validateVisualMD(rawText: string): { isValid: boolean; errors: s
   const errors: string[] = [];
   const lines = rawText.split(/\r?\n/);
   const openStack: { type: string; line: number }[] = [];
+  let inMarkdownCodeFence = false;
 
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
+
+    // Ignore macro-like markers inside code fences
+    if (/^(?:```|~~~)/.test(trimmed)) {
+      inMarkdownCodeFence = !inMarkdownCodeFence;
+      continue;
+    }
+    if (inMarkdownCodeFence) {
+      continue;
+    }
+
     const startMatch = trimmed.match(/^\$([A-Z_]+)\$S(?:\?.*)?$/i);
     if (startMatch) {
       openStack.push({ type: startMatch[1].toUpperCase(), line: i + 1 });

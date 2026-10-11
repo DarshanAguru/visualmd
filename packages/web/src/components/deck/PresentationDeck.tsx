@@ -221,22 +221,35 @@ function buildPresentationSlides(doc: VmdDocument): SlideItem[] {
           const headingMatch = trimmed.match(/^(#{1,2})\s+(.+)$/);
 
           if (isDivider) {
-            if (buffer.length > 0) {
+            const hasMeaningfulBuffer = buffer.some((l) => l.trim().length > 0 && !/^(?:---|\*\*\*)\s*$/.test(l.trim()));
+            if (hasMeaningfulBuffer) {
               currentNodes.push({ id: `${node.id}-part-${j}`, type: 'markdown', content: buffer.join('\n') } as VmdNode);
-              buffer = [];
             }
-            flushSlide();
+            buffer = [];
+
+            // Only flush if we actually have accumulated content for this slide.
+            // If currentNodes is empty, this divider was placed right under a heading (# Title\n---)
+            if (currentNodes.length > 0) {
+              flushSlide();
+            }
             continue;
           }
 
           if (headingMatch) {
-            if (buffer.length > 0) {
+            const hasMeaningfulBuffer = buffer.some((l) => l.trim().length > 0 && !/^(?:---|\*\*\*)\s*$/.test(l.trim()));
+            if (hasMeaningfulBuffer) {
               currentNodes.push({ id: `${node.id}-part-${j}`, type: 'markdown', content: buffer.join('\n') } as VmdNode);
-              buffer = [];
             }
+            buffer = [];
+
             const headingText = headingMatch[2].trim();
-            // Start a new slide with this heading as title
-            flushSlide(headingText);
+            // If current slide already has content, flush it to start a new slide with this heading
+            if (currentNodes.length > 0) {
+              flushSlide(headingText);
+            } else {
+              // Current slide was empty, simply adopt this heading as title without creating an empty slide
+              currentTitle = headingText;
+            }
             continue;
           }
         }
@@ -244,7 +257,7 @@ function buildPresentationSlides(doc: VmdDocument): SlideItem[] {
         buffer.push(line);
       }
 
-      if (buffer.length > 0) {
+      if (buffer.length > 0 && buffer.some((l) => l.trim().length > 0 && !/^(?:---|\*\*\*)\s*$/.test(l.trim()))) {
         currentNodes.push({ id: `${node.id}-end`, type: 'markdown', content: buffer.join('\n') } as VmdNode);
       }
     } else {
@@ -998,8 +1011,11 @@ export const PresentationDeck: React.FC<PresentationDeckProps> = ({
             )}
           </div>
         ) : (
-          /* Content Slide View - Neatly constrained to slide bounds with internal scrolling */
-          <div className="w-full max-h-[calc(100vh-140px)] rounded-3xl p-6 md:p-10 flex flex-col justify-between bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl transition-all overflow-hidden">
+          /* Content Slide View - Neatly constrained to slide bounds with internal scrolling and smooth fade transition */
+          <div
+            key={currentSlide.id}
+            className="w-full max-h-[calc(100vh-140px)] rounded-3xl p-6 md:p-10 flex flex-col justify-between bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl transition-all overflow-hidden animate-in fade-in zoom-in-[0.99] duration-150"
+          >
             <div className="shrink-0 mb-4 pb-2 border-b border-[var(--border-color)]/60">
               <div className="flex items-center gap-2 text-xs font-mono text-[var(--text-muted)] mb-1">
                 <span>SLIDE {currentSlideIdx + 1} OF {slides.length}</span>
@@ -1051,12 +1067,36 @@ export const PresentationDeck: React.FC<PresentationDeckProps> = ({
           ← / → to slide • D Draw • L Laser • B Blackout • F Fullscreen • Esc Exit
         </div>
 
-        {/* Global Progress Track */}
-        <div className="w-60 md:w-80 h-2 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-full overflow-hidden shadow-inner">
-          <div
-            className="h-full bg-[var(--accent)] transition-all duration-300"
-            style={{ width: `${((currentSlideIdx + 1) / slides.length) * 100}%` }}
-          />
+        {/* Global Progress Track & Quick Jump Dots */}
+        <div className="flex flex-col items-center gap-1.5 max-w-sm sm:max-w-md w-full px-2">
+          <div className="w-full h-1.5 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-full overflow-hidden shadow-inner">
+            <div
+              className="h-full bg-[var(--accent)] transition-all duration-300"
+              style={{ width: `${((currentSlideIdx + 1) / slides.length) * 100}%` }}
+            />
+          </div>
+          {/* Quick Jump Slide Dots (clickable) */}
+          <div className="flex items-center justify-center gap-1 overflow-x-auto max-w-full py-0.5">
+            {slides.length <= 25 ? (
+              slides.map((s, idx) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setCurrentSlideIdx(idx)}
+                  className={`transition-all rounded-full cursor-pointer ${
+                    idx === currentSlideIdx
+                      ? 'w-4 h-1.5 bg-[var(--accent)]'
+                      : 'w-1.5 h-1.5 bg-[var(--border-color)] hover:bg-[var(--text-muted)]'
+                  }`}
+                  title={`Slide ${idx + 1}: ${s.title}`}
+                />
+              ))
+            ) : (
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                Slide {currentSlideIdx + 1} of {slides.length}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Prev / Next controls */}

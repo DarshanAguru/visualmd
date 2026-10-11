@@ -225,3 +225,36 @@ $quiz$E`;
   assert.equal(quiz.explanation, 'Correct is B.');
 });
 
+test('VisualMD Compiler (v1.0.22) - Fenced code block immunity for raw macros in markdown', () => {
+  const input = `# Markdown with Code Block
+Here is code explaining VisualMD syntax:
+\`\`\`markdown
+$SNIPPET$S?lang=ts
+console.log("hello");
+$SNIPPET$E
+\`\`\`
+And here is a regular paragraph after code.`;
+
+  const doc = parseVisualMD(input);
+  assert.equal(doc.nodes.length, 1);
+  assert.equal(doc.nodes[0].type, 'markdown');
+  assert.match(doc.nodes[0].content, /\$SNIPPET\$S/);
+  assert.match(doc.nodes[0].content, /And here is a regular paragraph/);
+});
+
+test('VisualMD Compiler - validateVisualMD code fence immunity', () => {
+  const input = `# Guide
+Here is unclosed syntax inside a code block:
+\`\`\`markdown
+$CALLOUT$S?type=warn
+This callout is deliberately unclosed inside code fence.
+\`\`\`
+All code ends cleanly.`;
+
+  const validation = validateVisualMD(input);
+  assert.equal(validation.isValid, true);
+  assert.equal(validation.errors.length, 0);
+});
+
+
+

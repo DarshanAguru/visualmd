@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { marked } from 'marked';
 import { Annotation } from '../../types';
-import { Check, X, Edit3, CornerDownLeft } from 'lucide-react';
+import { Check, X, Edit3, CornerDownLeft, MessageSquare, Trash2 } from 'lucide-react';
 
 interface MarkdownRendererProps {
   content: string;
@@ -175,7 +175,7 @@ function addTableRow(markdown: string, tableIndex: number): string {
   return markdown;
 }
 
-function enhanceMarkdownHtml(rawHtml: string): string {
+function enhanceMarkdownHtml(rawHtml: string, editableTables: Set<number>): string {
   let html = rawHtml;
 
   // 1. Task Checkboxes: make them checkable with data-task-idx
@@ -189,10 +189,11 @@ function enhanceMarkdownHtml(rawHtml: string): string {
   // Mark task list items for clean styling
   html = html.replace(/<li([^>]*)>(\s*<input[^>]*class=["']vmd-task-checkbox[^>]*>)/gi, '<li$1 class="vmd-task-item">$2');
 
-  // 2. Tables Enhancement: wrap and add data attributes for cell editing + add row button
+  // 2. Tables Enhancement: wrap and add data attributes for cell editing + table header toolbar
   let tableIdx = 0;
   html = html.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
     const currentTableIdx = tableIdx++;
+    const isEditable = editableTables.has(currentTableIdx);
     let rowIdx = 0;
     const enhancedTable = tableHtml.replace(/<tbody>([\s\S]*?)<\/tbody>/gi, (_tbodyMatch, tbodyContent) => {
       const enhancedBody = tbodyContent.replace(/<tr[\s\S]*?<\/tr>/gi, (trMatch: string) => {
@@ -205,27 +206,52 @@ function enhanceMarkdownHtml(rawHtml: string): string {
           const displayContent = isEmpty
             ? `<span class="vmd-cell-placeholder text-[var(--text-muted)] italic text-[11px] opacity-60 select-none flex items-center gap-1 pointer-events-none"><span class="text-[9px] opacity-40">✎</span> <span class="opacity-70">empty</span></span>`
             : cellContent;
-          return `<td${tdAttrs} data-table-idx="${currentTableIdx}" data-row-idx="${currentRowIdx}" data-col-idx="${currentColIdx}" class="vmd-table-cell cursor-pointer transition-colors" title="Click to edit cell">${displayContent}</td>`;
+          const cursorClass = isEditable ? 'cursor-pointer hover:bg-[var(--bg-tertiary)]' : 'cursor-default select-text';
+          const cellTitle = isEditable ? 'Click to edit cell contents' : 'Read-only cell (select text to highlight or add note)';
+          return `<td${tdAttrs} data-table-idx="${currentTableIdx}" data-row-idx="${currentRowIdx}" data-col-idx="${currentColIdx}" class="vmd-table-cell ${cursorClass} transition-colors" title="${cellTitle}">${displayContent}</td>`;
         });
       });
       return `<tbody>${enhancedBody}</tbody>`;
     });
 
     return `
-      <div class="vmd-table-wrapper w-full max-w-full my-5 border border-[var(--border-color)] rounded-xl bg-[var(--bg-card)] shadow-xs overflow-hidden">
+      <div class="vmd-table-wrapper w-full max-w-full my-5 border border-[var(--border-color)] rounded-xl bg-[var(--bg-card)] shadow-xs relative">
+        <div class="vmd-table-header flex items-center justify-between px-3.5 py-2 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] text-xs select-none">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-mono text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Table ${currentTableIdx + 1}</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border ${isEditable ? 'bg-amber-500/10 text-amber-500 border-amber-500/30' : 'bg-slate-500/10 text-[var(--text-muted)] border-slate-500/20'}">
+              ${isEditable ? '✎ Edit Mode' : '🔒 Read-Only'}
+            </span>
+            <span class="text-[10px] text-[var(--text-muted)] hidden sm:inline truncate">
+              ${isEditable ? 'Click any cell to edit contents' : 'Select cell text to highlight or add notes'}
+            </span>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button type="button" class="vmd-toggle-table-edit-btn flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-medium cursor-pointer border transition-colors ${isEditable ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-xs' : 'bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] border-[var(--border-color)]'}" data-table-idx="${currentTableIdx}" title="${isEditable ? 'Finish editing table' : 'Edit table contents and cells'}">
+              <span>${isEditable ? '✓ Done' : '✎ Edit Table'}</span>
+            </button>
+            ${isEditable ? `
+              <button type="button" class="vmd-add-table-row-btn flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] text-[10px] transition-colors cursor-pointer" data-table-idx="${currentTableIdx}" title="Add a new row to this table">
+                <span>+ Row</span>
+              </button>
+            ` : ''}
+          </div>
+        </div>
         <div class="vmd-table-scroll-container w-full max-w-full overflow-x-auto">
           ${enhancedTable}
         </div>
-        <div class="vmd-table-footer flex items-center justify-between px-3.5 py-2 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] text-[11px] text-[var(--text-muted)] select-none">
+        <div class="vmd-table-footer flex items-center justify-between px-3.5 py-1.5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] text-[11px] text-[var(--text-muted)] select-none">
           <div class="flex items-center gap-2">
-            <span class="font-mono text-[10px] font-medium text-[var(--text-secondary)]">Table ${currentTableIdx + 1}</span>
-            <span class="opacity-40">•</span>
-            <span class="text-[10px] text-[var(--text-muted)]">Click cell to edit</span>
+            <span class="font-mono text-[9px] text-[var(--text-muted)]">Rows & columns auto-aligned</span>
             <span class="vmd-table-scroll-hint hidden items-center gap-1 text-[9px] font-mono text-[var(--accent)] bg-[var(--accent-surface)] px-1.5 py-0.5 rounded border border-[var(--border-color)]">⟷ Scrollable table</span>
           </div>
-          <button type="button" class="vmd-add-table-row-btn flex items-center gap-1 px-2.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] transition-colors font-medium cursor-pointer shadow-2xs" data-table-idx="${currentTableIdx}" title="Add a new row to this table">
-            <span>+ Add Row</span>
-          </button>
+          ${isEditable ? `
+            <button type="button" class="vmd-add-table-row-btn flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] text-[10px] transition-colors cursor-pointer" data-table-idx="${currentTableIdx}" title="Add a new row to this table">
+              <span>+ Add Row</span>
+            </button>
+          ` : `
+            <span class="text-[9px] font-mono text-[var(--text-muted)]">Click '✎ Edit Table' above to edit</span>
+          `}
         </div>
       </div>
     `;
@@ -242,105 +268,221 @@ function enhanceMarkdownHtml(rawHtml: string): string {
   return html;
 }
 
-function applySingleAnnotationToHtml(
-  rawHtml: string,
-  anno: Annotation
-): string {
-  if (!anno.selected_text || anno.selected_text.trim().length < 2) return rawHtml;
+/**
+ * Robust DOM TreeWalker annotation application.
+ * Reliably highlights text across multiple lines, bullet points, links, and tags,
+ * and anchors table cells even after text edits.
+ */
+function applyDOMAnnotations(container: HTMLElement, baseHtml: string, annotations?: Annotation[]) {
+  // Always reset to pristine baseHtml first to prevent duplicate stacking!
+  container.innerHTML = baseHtml;
+  if (!annotations || annotations.length === 0) return;
 
-  const target = anno.selected_text.trim();
-  const targetOccur = anno.occurrence_index ?? 0;
-  let currentOccur = 0;
-  let replaced = false;
+  // 1. Table cell anchored annotations (only when there is no specific selected text range)
+  for (const anno of annotations) {
+    if (anno.table_cell && (!anno.selected_text || anno.selected_text.trim().length < 2)) {
+      const parts = anno.table_cell.split(':');
+      if (parts.length === 3) {
+        const [tIdx, rIdx, cIdx] = parts;
+        const cell = container.querySelector(
+          `td[data-table-idx="${tIdx}"][data-row-idx="${rIdx}"][data-col-idx="${cIdx}"]`
+        ) as HTMLElement | null;
+        if (cell) {
+          cell.setAttribute('data-note-id', anno.id);
+          cell.classList.add('vmd-cell-annotated');
+          cell.style.cursor = 'pointer';
+          const color = anno.color || 'yellow';
+          const isNote = Boolean(anno.note && anno.note !== 'Highlighted snippet');
+          if (isNote) {
+            cell.title = `Note: ${anno.note} (Hover cell to view note)`;
+            const badge = document.createElement('span');
+            badge.className = `vmd-cell-badge inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-${color}-500/15 text-${color}-600 dark:text-${color}-400 border border-${color}-500/30 select-none pointer-events-none relative`;
+            badge.setAttribute('data-note-id', anno.id);
+            badge.textContent = '💬 Note';
+            cell.appendChild(badge);
+          }
+        }
+      }
+    }
+  }
 
-  // Split HTML into HTML tags vs text tokens
-  const parts = rawHtml.split(/(<[^>]+>)/g);
-  let inCodeBlock = false;
+  // 2. Text range annotations (multi-line, cross-tag, and inside table cells)
+  for (const anno of annotations) {
+    if (!anno.selected_text || anno.selected_text.trim().length < 2) continue;
 
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
-    if (!part) continue;
+    const targetRaw = anno.selected_text.trim();
+    const targetOccur = anno.occurrence_index ?? 0;
+    const color = anno.color || 'yellow';
+    const isNote = Boolean(anno.note && anno.note !== 'Highlighted snippet');
 
-    // Preserve tags and monitor code blocks
-    if (part.startsWith('<')) {
-      if (/^<pre\b/i.test(part) || /^<code\b/i.test(part)) inCodeBlock = true;
-      if (/^<\/pre>/i.test(part) || /^<\/code>/i.test(part)) inCodeBlock = false;
-      continue;
+    // Create a TreeWalker that visits text nodes
+    const walker = document.createTreeWalker(
+      container,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: (node) => {
+          const parent = node.parentElement;
+          if (!parent) return NodeFilter.FILTER_REJECT;
+          const tag = parent.tagName.toLowerCase();
+          if (tag === 'script' || tag === 'style') return NodeFilter.FILTER_REJECT;
+          if (
+            parent.closest('.vmd-note-tooltip') ||
+            parent.closest('.vmd-note-box') ||
+            parent.closest('.vmd-highlight') ||
+            parent.closest('.vmd-cell-badge') ||
+            parent.closest('.vmd-table-header') ||
+            parent.closest('.vmd-table-footer')
+          ) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      }
+    );
+
+    interface TextNodeInfo {
+      node: Text;
+      start: number;
+      end: number;
+    }
+    const nodes: TextNodeInfo[] = [];
+    let fullText = '';
+    let curr: Node | null;
+    while ((curr = walker.nextNode())) {
+      const textNode = curr as Text;
+      const val = textNode.nodeValue || '';
+      const start = fullText.length;
+      fullText += val;
+      nodes.push({ node: textNode, start, end: fullText.length });
     }
 
-    if (inCodeBlock || replaced) continue;
+    if (nodes.length === 0 || !fullText) continue;
 
-    const escapedTarget = escapeRegex(target);
-    const regex = new RegExp(escapedTarget, 'gi');
+    // Search target in fullText
+    let matchStart = -1;
+    let matchEnd = -1;
 
-    let match: RegExpExecArray | null;
-    let lastIndex = 0;
-    let newPart = '';
-    let partChanged = false;
+    // 1. Direct search (case-insensitive)
+    let searchIdx = 0;
+    let currentOccur = 0;
+    const lowerFull = fullText.toLowerCase();
+    const lowerTarget = targetRaw.toLowerCase();
 
-    while ((match = regex.exec(part)) !== null) {
-      if (currentOccur === targetOccur && !replaced) {
-        const matchStart = match.index;
-        const matchEnd = match.index + match[0].length;
-        const matchedText = part.slice(matchStart, matchEnd);
+    while ((searchIdx = lowerFull.indexOf(lowerTarget, searchIdx)) !== -1) {
+      if (currentOccur === targetOccur) {
+        matchStart = searchIdx;
+        matchEnd = searchIdx + targetRaw.length;
+        break;
+      }
+      currentOccur++;
+      searchIdx += lowerTarget.length;
+    }
 
-        newPart += part.slice(lastIndex, matchStart);
-
-        const isNote = anno.note && anno.note !== 'Highlighted snippet';
-        const color = anno.color || 'yellow';
-
-        if (isNote) {
-          const safeNote = escapeHtml(anno.note);
-          newPart +=
-            `<span class="vmd-note-box vmd-note-${color}" data-note-id="${anno.id}">` +
-              `<span class="vmd-note-text">${escapeHtml(matchedText)}</span>` +
-              `<span class="vmd-note-badge">💬</span>` +
-              `<span class="vmd-note-tooltip">` +
-                `<span class="vmd-tooltip-header">` +
-                  `<span style="color: var(--accent); font-weight: bold;">${color.toUpperCase()} NOTE</span>` +
-                  `<span class="vmd-tooltip-delete" data-delete-id="${anno.id}" title="Delete note">✕</span>` +
-                `</span>` +
-                `<span class="vmd-tooltip-content">${safeNote}</span>` +
-              `</span>` +
-            `</span>`;
-        } else {
-          newPart += `<mark class="vmd-highlight vmd-highlight-${color}" data-note-id="${anno.id}" title="Highlighted in ${color}">${escapeHtml(matchedText)}</mark>`;
-        }
-
-        lastIndex = matchEnd;
-        replaced = true;
-        partChanged = true;
-        break; // Replaced the single target occurrence!
-      } else {
-        currentOccur++;
+    // 2. Fallback: Normalized whitespace search across tags / lines
+    if (matchStart === -1) {
+      const tokens = targetRaw
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(escapeRegex);
+      if (tokens.length > 0) {
+        const pattern = tokens.join('\\s+');
+        try {
+          const regex = new RegExp(pattern, 'gi');
+          let m: RegExpExecArray | null;
+          let regOccur = 0;
+          while ((m = regex.exec(fullText)) !== null) {
+            if (regOccur === targetOccur || matchStart === -1) {
+              matchStart = m.index;
+              matchEnd = m.index + m[0].length;
+              if (regOccur === targetOccur) break;
+            }
+            regOccur++;
+          }
+        } catch {}
       }
     }
 
-    if (partChanged) {
-      newPart += part.slice(lastIndex);
-      parts[i] = newPart;
+    // 3. Fallback: First 30 characters and last 30 characters for long multi-line selections
+    if (matchStart === -1 && targetRaw.length > 40) {
+      const startSnippet = targetRaw.slice(0, 30).trim().toLowerCase();
+      const endSnippet = targetRaw.slice(-30).trim().toLowerCase();
+      const sIdx = lowerFull.indexOf(startSnippet);
+      if (sIdx !== -1) {
+        const eIdx = lowerFull.indexOf(endSnippet, sIdx);
+        if (eIdx !== -1) {
+          matchStart = sIdx;
+          matchEnd = eIdx + endSnippet.length;
+        }
+      }
+    }
+
+    if (matchStart === -1 || matchEnd <= matchStart) continue;
+
+    // Collect overlapping text nodes
+    const overlappingNodes: { info: TextNodeInfo; nodeStart: number; nodeEnd: number }[] = [];
+    for (const info of nodes) {
+      if (info.end <= matchStart) continue;
+      if (info.start >= matchEnd) break;
+      const nodeStart = Math.max(0, matchStart - info.start);
+      const nodeEnd = Math.min(info.node.nodeValue?.length || 0, matchEnd - info.start);
+      if (nodeEnd > nodeStart) {
+        overlappingNodes.push({ info, nodeStart, nodeEnd });
+      }
+    }
+
+    let isFirstSegment = true;
+    for (const item of overlappingNodes) {
+      const textNode = item.info.node;
+      const fullNodeText = textNode.nodeValue || '';
+      const beforeText = fullNodeText.slice(0, item.nodeStart);
+      const matchText = fullNodeText.slice(item.nodeStart, item.nodeEnd);
+      const afterText = fullNodeText.slice(item.nodeEnd);
+
+      const parent = textNode.parentNode;
+      if (!parent) continue;
+
+      const fragment = document.createDocumentFragment();
+      if (beforeText) {
+        fragment.appendChild(document.createTextNode(beforeText));
+      }
+
+      if (isNote) {
+        const noteWrapper = document.createElement('span');
+        noteWrapper.className = `vmd-note-box vmd-note-${color}`;
+        noteWrapper.setAttribute('data-note-id', anno.id);
+
+        const textSpan = document.createElement('span');
+        textSpan.className = 'vmd-note-text';
+        textSpan.textContent = matchText;
+        noteWrapper.appendChild(textSpan);
+
+        if (isFirstSegment) {
+          const badge = document.createElement('span');
+          badge.className = 'vmd-note-badge';
+          badge.textContent = '💬';
+          noteWrapper.appendChild(badge);
+          isFirstSegment = false;
+        }
+
+        fragment.appendChild(noteWrapper);
+      } else {
+        const mark = document.createElement('mark');
+        mark.className = `vmd-highlight vmd-highlight-${color}`;
+        mark.setAttribute('data-note-id', anno.id);
+        mark.title = `Highlighted in ${color}`;
+        mark.textContent = matchText;
+        fragment.appendChild(mark);
+      }
+
+      if (afterText) {
+        fragment.appendChild(document.createTextNode(afterText));
+      }
+
+      try {
+        parent.replaceChild(fragment, textNode);
+      } catch {}
     }
   }
-
-  // Fallback: If targetOccur was > 0 and not found, try occurrence 0
-  if (!replaced && targetOccur > 0) {
-    return applySingleAnnotationToHtml(rawHtml, { ...anno, occurrence_index: 0 });
-  }
-
-  return parts.join('');
-}
-
-function applyAnnotationsToHtml(
-  rawHtml: string,
-  annotations?: Annotation[]
-): string {
-  if (!annotations || annotations.length === 0) return rawHtml;
-
-  let currentHtml = rawHtml;
-  for (const anno of annotations) {
-    currentHtml = applySingleAnnotationToHtml(currentHtml, anno);
-  }
-  return currentHtml;
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
@@ -350,6 +492,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   onUpdateContent,
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const [editableTables, setEditableTables] = React.useState<Set<number>>(new Set());
   const [editingCell, setEditingCell] = React.useState<{
     tableIdx: number;
     rowIdx: number;
@@ -358,16 +501,53 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     rect: { top: number; left: number; width: number; height: number };
   } | null>(null);
 
+  const [activeTooltip, setActiveTooltip] = React.useState<{
+    id: string;
+    note: string;
+    color: string;
+    title: string;
+    badgeRect: { top: number; left: number; width: number; height: number };
+  } | null>(null);
+  const [tooltipHeight, setTooltipHeight] = React.useState(140);
+  const tooltipRef = React.useRef<HTMLDivElement | null>(null);
+  const tooltipLeaveTimer = React.useRef<any>(null);
+
+  React.useLayoutEffect(() => {
+    if (tooltipRef.current) {
+      const h = tooltipRef.current.offsetHeight;
+      if (h && Math.abs(h - tooltipHeight) > 2) {
+        setTooltipHeight(h);
+      }
+    }
+  }, [activeTooltip]);
+
+  React.useEffect(() => {
+    if (!containerRef.current) return;
+    const allActive = containerRef.current.querySelectorAll('.vmd-note-active');
+    allActive.forEach((el) => el.classList.remove('vmd-note-active'));
+
+    if (activeTooltip) {
+      const targetEl = containerRef.current.querySelector(`[data-note-id="${activeTooltip.id}"]`);
+      if (targetEl) {
+        targetEl.classList.add('vmd-note-active');
+      }
+    }
+  }, [activeTooltip?.id]);
+
   const html = useMemo(() => {
     try {
       const sanitized = sanitizeMarkdownContent(content);
       const parsedHtml = marked.parse(sanitized, { async: false, breaks: true }) as string;
-      const enhancedHtml = enhanceMarkdownHtml(parsedHtml);
-      return applyAnnotationsToHtml(enhancedHtml, annotations);
+      return enhanceMarkdownHtml(parsedHtml, editableTables);
     } catch {
       return `<p>${escapeHtml(content)}</p>`;
     }
-  }, [content, annotations]);
+  }, [content, editableTables]);
+
+  React.useEffect(() => {
+    if (!containerRef.current) return;
+    applyDOMAnnotations(containerRef.current, html, annotations);
+  }, [html, annotations]);
 
   React.useEffect(() => {
     if (!containerRef.current) return;
@@ -389,6 +569,148 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     window.addEventListener('resize', checkOverflow);
     return () => window.removeEventListener('resize', checkOverflow);
   }, [html]);
+
+  React.useEffect(() => {
+    if (!containerRef.current) return;
+    const handleTableScroll = () => {
+      setActiveTooltip(null);
+    };
+    const scrollContainers = containerRef.current.querySelectorAll('.vmd-table-scroll-container');
+    scrollContainers.forEach((el) => el.addEventListener('scroll', handleTableScroll));
+    return () => {
+      scrollContainers.forEach((el) => el.removeEventListener('scroll', handleTableScroll));
+    };
+  }, [html]);
+
+  React.useEffect(() => {
+    const handleScrollOrKey = (e: Event) => {
+      if (e.type === 'keydown' && (e as KeyboardEvent).key === 'Escape') {
+        setActiveTooltip(null);
+        return;
+      }
+      if (e.type === 'scroll') {
+        setActiveTooltip(null);
+      }
+    };
+    window.addEventListener('scroll', handleScrollOrKey, true);
+    window.addEventListener('keydown', handleScrollOrKey);
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrKey, true);
+      window.removeEventListener('keydown', handleScrollOrKey);
+    };
+  }, []);
+
+  const getTooltipStyle = () => {
+    if (!activeTooltip || !containerRef.current) return null;
+    const margin = 14;
+    const contRect = containerRef.current.getBoundingClientRect();
+    const sidebarEl = document.querySelector('aside');
+    const sidebarRight = sidebarEl ? sidebarEl.getBoundingClientRect().right : 0;
+    const availableLeftGutter = contRect.left - sidebarRight;
+
+    // Use generous card width when ample left gutter is available
+    let cardWidth = 280;
+    if (availableLeftGutter >= 340) {
+      cardWidth = 320;
+    } else if (availableLeftGutter < 290) {
+      cardWidth = Math.max(240, Math.min(270, availableLeftGutter - 20));
+    }
+
+    let left: number;
+    let isDockedInMargin = false;
+
+    if (availableLeftGutter >= cardWidth + margin) {
+      // Laptop/Desktop: Render cleanly in the empty left margin directly beside the component
+      left = contRect.left - cardWidth - margin;
+      isDockedInMargin = true;
+    } else if (contRect.left >= cardWidth + 12) {
+      // Moderate space: dock to the left of the content
+      left = Math.max(sidebarRight + 12, contRect.left - cardWidth - 12);
+      isDockedInMargin = true;
+    } else {
+      // Less width screens: safely align to left boundary without overflowing sidebar
+      left = Math.max(sidebarRight + 12, Math.min(contRect.left + 8, window.innerWidth - cardWidth - 16));
+      isDockedInMargin = false;
+    }
+
+    // Exact horizontal axis alignment: center vertically on the note's horizontal center!
+    const noteCenterY = activeTooltip.badgeRect.top + activeTooltip.badgeRect.height / 2;
+    const top = Math.round(noteCenterY - (tooltipHeight / 2));
+
+    // Generous full Y-axis space utilization: allow note body to expand down to the bottom of the viewport
+    const maxBodyHeight = Math.max(260, window.innerHeight - Math.max(0, top) - 110);
+    const maxCardHeight = Math.max(340, window.innerHeight - Math.max(0, top) - 16);
+
+    return {
+      top: `${top}px`,
+      left: `${left}px`,
+      width: `${cardWidth}px`,
+      maxBodyHeight,
+      maxCardHeight: `${maxCardHeight}px`,
+      isDockedInMargin,
+    };
+  };
+
+  const handleMouseOver = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    // Match the entire cell if annotated, or the note badge, or the text note box
+    const noteEl = target.closest('td[data-note-id], .vmd-cell-badge, .vmd-note-box') as HTMLElement | null;
+    if (!noteEl || !containerRef.current) return;
+
+    if (tooltipLeaveTimer.current) {
+      clearTimeout(tooltipLeaveTimer.current);
+      tooltipLeaveTimer.current = null;
+    }
+
+    const annoId = noteEl.getAttribute('data-note-id');
+    if (!annoId) return;
+
+    const anno = annotations?.find((a) => a.id === annoId);
+    const isNote = Boolean(anno?.note && anno.note !== 'Highlighted snippet');
+    if (!anno || !isNote) return;
+
+    if (activeTooltip && activeTooltip.id === anno.id) return;
+
+    // Anchor to noteEl (the exact word/box) if selected_text, else row
+    const anchorEl = (anno.table_cell && (!anno.selected_text || anno.selected_text.trim().length < 2))
+      ? (noteEl.closest('tr') || noteEl)
+      : noteEl;
+    const badgeRect = anchorEl.getBoundingClientRect();
+
+    let title = 'Note';
+    if (anno.selected_text && anno.selected_text.trim().length >= 2) {
+      const snippet = anno.selected_text.trim();
+      title = snippet.length > 25 ? `Note: "${snippet.slice(0, 22)}..."` : `Note: "${snippet}"`;
+    } else if (anno.table_cell) {
+      const parts = anno.table_cell.split(':');
+      if (parts.length === 3) {
+        title = `Table ${Number(parts[0]) + 1} • Row ${Number(parts[1]) + 1}, Col ${Number(parts[2]) + 1}`;
+      } else {
+        title = 'Table Cell Note';
+      }
+    }
+
+    setActiveTooltip({
+      id: anno.id,
+      note: anno.note,
+      color: anno.color || 'yellow',
+      title,
+      badgeRect: { top: badgeRect.top, left: badgeRect.left, width: badgeRect.width, height: badgeRect.height },
+    });
+  };
+
+  const handleMouseOut = (e: React.MouseEvent<HTMLDivElement>) => {
+    const related = e.relatedTarget as HTMLElement | null;
+    if (related && related.closest('.vmd-floating-note-tooltip, td[data-note-id], .vmd-cell-badge, .vmd-note-box')) {
+      return;
+    }
+    if (tooltipLeaveTimer.current) {
+      clearTimeout(tooltipLeaveTimer.current);
+    }
+    tooltipLeaveTimer.current = setTimeout(() => {
+      setActiveTooltip(null);
+    }, 150);
+  };
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -423,7 +745,24 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       }
     }
 
-    // 3. Add Table Row Button
+    // 3. Toggle Table Edit Mode (Read-Only vs Edit Mode)
+    const toggleBtn = target.closest('.vmd-toggle-table-edit-btn') as HTMLElement | null;
+    if (toggleBtn) {
+      e.stopPropagation();
+      const tIdx = parseInt(toggleBtn.getAttribute('data-table-idx') || '0', 10);
+      setEditableTables((prev) => {
+        const next = new Set(prev);
+        if (next.has(tIdx)) {
+          next.delete(tIdx);
+        } else {
+          next.add(tIdx);
+        }
+        return next;
+      });
+      return;
+    }
+
+    // 4. Add Table Row Button
     const addRowBtn = target.closest('.vmd-add-table-row-btn') as HTMLElement | null;
     if (addRowBtn && onUpdateContent) {
       e.stopPropagation();
@@ -436,7 +775,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       }
     }
 
-    // 4. Copy Code Block Button
+    // 5. Copy Code Block Button
     const copyBtn = target.closest('.vmd-copy-code-btn') as HTMLElement | null;
     if (copyBtn) {
       e.stopPropagation();
@@ -453,7 +792,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       return;
     }
 
-    // 5. Table Cell Click -> Open Inline Cell Editor
+    // 6. Table Cell Click -> Open Inline Cell Editor ONLY IF in Edit Mode
     const cellEl = target.closest('td.vmd-table-cell') as HTMLElement | null;
     if (cellEl && onUpdateContent) {
       const tableIdxStr = cellEl.getAttribute('data-table-idx');
@@ -462,6 +801,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 
       if (tableIdxStr !== null && rowIdxStr !== null && colIdxStr !== null) {
         const tableIdx = parseInt(tableIdxStr, 10);
+        // If table is in Read-Only mode (the default), do NOT open cell editor!
+        // Allow user to select text freely for highlighting or note taking.
+        if (!editableTables.has(tableIdx)) {
+          return;
+        }
+
         const rowIdx = parseInt(rowIdxStr, 10);
         const colIdx = parseInt(colIdxStr, 10);
 
@@ -499,6 +844,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         }
       }
     }
+
+    // 7. Click outside tooltip dismisses it
+    if (activeTooltip && !target.closest('.vmd-floating-note-tooltip')) {
+      setActiveTooltip(null);
+    }
   };
 
   const handleCommitCellEdit = (newValue: string) => {
@@ -517,6 +867,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       <div
         ref={containerRef}
         onClick={handleClick}
+        onMouseOver={handleMouseOver}
+        onMouseOut={handleMouseOut}
         className="markdown-body leading-relaxed font-normal text-[var(--text-primary)] w-full max-w-full"
         style={{
           fontSize: 'calc(1rem * var(--vmd-font-scale, 1))',
@@ -613,6 +965,116 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           </div>
         </>
       )}
+
+      {/* Smart Margin Note Card - Shows on Left Side Empty Area */}
+      {(() => {
+        if (!activeTooltip) return null;
+        const pos = getTooltipStyle();
+        if (!pos) return null;
+
+        return (
+          <div
+            ref={tooltipRef}
+            className="vmd-floating-note-tooltip fixed z-[9999999] pointer-events-auto animate-in fade-in slide-in-from-left-2 duration-150"
+            onMouseEnter={() => {
+              if (tooltipLeaveTimer.current) {
+                clearTimeout(tooltipLeaveTimer.current);
+                tooltipLeaveTimer.current = null;
+              }
+            }}
+            onMouseLeave={() => {
+              setActiveTooltip(null);
+            }}
+            style={{
+              top: pos.top,
+              left: pos.left,
+              width: pos.width,
+              maxHeight: pos.maxCardHeight,
+            }}
+          >
+            <div className="relative p-3.5 rounded-2xl bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-color)] shadow-[0_12px_36px_-6px_rgba(0,0,0,0.22),0_0_0_1px_rgba(0,0,0,0.06)] text-xs leading-relaxed backdrop-blur-md flex flex-col">
+              {/* Pointer arrow aligning directly on the note's horizontal axis */}
+              {pos.isDockedInMargin && (
+                <div
+                  className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rotate-45 bg-[var(--bg-card)] border-t border-r border-[var(--border-color)] z-10"
+                />
+              )}
+
+              {/* Left accent color strip */}
+              <div
+                className="absolute left-0 top-3 bottom-3 w-1.5 rounded-r-full"
+                style={{
+                  backgroundColor:
+                    activeTooltip.color === 'emerald'
+                      ? '#10b981'
+                      : activeTooltip.color === 'sky'
+                      ? '#38bdf8'
+                      : activeTooltip.color === 'rose'
+                      ? '#f43f5e'
+                      : activeTooltip.color === 'purple'
+                      ? '#a855f7'
+                      : activeTooltip.color === 'orange'
+                      ? '#ea580c'
+                      : activeTooltip.color === 'teal'
+                      ? '#0d9488'
+                      : activeTooltip.color === 'coral'
+                      ? '#dc2626'
+                      : '#f59e0b',
+                }}
+              />
+
+              {/* Card Header */}
+              <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-[var(--border-color)] pl-1.5 shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div
+                    className="p-1.5 rounded-lg shrink-0 flex items-center justify-center"
+                    style={{ backgroundColor: 'var(--accent-surface)' }}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[11px] font-bold text-[var(--text-primary)] truncate leading-tight">
+                      {activeTooltip.title}
+                    </span>
+                    <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
+                      Marginal Note
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onDeleteAnnotation) onDeleteAnnotation(activeTooltip.id);
+                      setActiveTooltip(null);
+                    }}
+                    className="p-1 text-[var(--text-muted)] hover:text-rose-500 rounded-md hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+                    title="Delete note"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Note Content Body - Utilizes full available Y-axis space instead of small scroll view */}
+              <div
+                style={{ maxHeight: `${pos.maxBodyHeight}px` }}
+                className="pl-1.5 pr-1 text-xs text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed overflow-y-auto selection:bg-blue-500/20"
+              >
+                {activeTooltip.note}
+              </div>
+
+              {/* Status Footer */}
+              <div className="mt-2.5 pt-2 border-t border-[var(--border-color)]/60 flex items-center justify-between text-[9px] text-[var(--text-muted)] font-mono select-none pl-1.5">
+                <span>Hover away to dismiss</span>
+                <span>Esc to close</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

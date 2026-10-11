@@ -42,6 +42,7 @@ export interface AnnotationRecord {
   color: string;
   note: string;
   occurrence_index?: number;
+  table_cell?: string | null;
   created_at: string;
 }
 
@@ -110,6 +111,7 @@ export class VisualMDDatabase {
         color TEXT DEFAULT 'yellow',
         note TEXT NOT NULL,
         occurrence_index INTEGER DEFAULT 0,
+        table_cell TEXT,
         created_at TEXT NOT NULL,
         FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
       );
@@ -138,6 +140,12 @@ export class VisualMDDatabase {
     } catch {
       // Column already exists
     }
+
+    try {
+      this.db.exec('ALTER TABLE annotations ADD COLUMN table_cell TEXT;');
+    } catch {
+      // Column already exists
+    }
   }
 
   // Folders
@@ -146,15 +154,46 @@ export class VisualMDDatabase {
     return stmt.all() as unknown as FolderRecord[];
   }
 
+  public getFolderById(id: string): FolderRecord | null {
+    const stmt = this.db.prepare('SELECT * FROM folders WHERE id = ?');
+    const folder = stmt.get(id) as unknown as FolderRecord | undefined;
+    return folder || null;
+  }
+
   public createFolder(name: string, parentId: string | null = null): FolderRecord {
+    const trimmed = (name || '').trim();
+    const existingStmt = this.db.prepare(
+      'SELECT * FROM folders WHERE LOWER(name) = LOWER(?) AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))'
+    );
+    const existing = existingStmt.get(trimmed, parentId, parentId) as unknown as FolderRecord | undefined;
+    if (existing) {
+      return existing;
+    }
+
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const stmt = this.db.prepare(`
       INSERT INTO folders (id, name, parent_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?)
     `);
-    stmt.run(id, name, parentId, now, now);
-    return { id, name, parent_id: parentId, created_at: now, updated_at: now };
+    stmt.run(id, trimmed, parentId, now, now);
+    return { id, name: trimmed, parent_id: parentId, created_at: now, updated_at: now };
+  }
+
+  public renameFolder(id: string, newName: string): FolderRecord | null {
+    const trimmed = (newName || '').trim();
+    if (!trimmed) return null;
+    const existing = this.getFolderById(id);
+    if (!existing) return null;
+
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`
+      UPDATE folders
+      SET name = ?, updated_at = ?
+      WHERE id = ?
+    `);
+    stmt.run(trimmed, now, id);
+    return { ...existing, name: trimmed, updated_at: now };
   }
 
   public deleteFolder(id: string): { deletedDocFilePaths: string[] } {
@@ -356,26 +395,28 @@ export class VisualMDDatabase {
   public addAnnotation(
     docId: string,
     nodeId: string,
-    selectedText: string,
-    note: string,
+    selectedText: string = '',
+    note: string = '',
     color: string = 'yellow',
-    occurrenceIndex: number = 0
+    occurrenceIndex: number = 0,
+    tableCell: string | null = null
   ): AnnotationRecord {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     this.db.prepare(`
-      INSERT INTO annotations (id, doc_id, node_id, selected_text, color, note, occurrence_index, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, docId, nodeId, selectedText, color, note, occurrenceIndex, now);
+      INSERT INTO annotations (id, doc_id, node_id, selected_text, color, note, occurrence_index, table_cell, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, docId, nodeId, selectedText || '', color || 'yellow', note || '', occurrenceIndex || 0, tableCell || null, now);
 
     return {
       id,
       doc_id: docId,
       node_id: nodeId,
-      selected_text: selectedText,
-      color,
-      note,
-      occurrence_index: occurrenceIndex,
+      selected_text: selectedText || '',
+      color: color || 'yellow',
+      note: note || '',
+      occurrence_index: occurrenceIndex || 0,
+      table_cell: tableCell || null,
       created_at: now,
     };
   }

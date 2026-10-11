@@ -182,17 +182,55 @@ export const App: React.FC = () => {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const isInput =
+        ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName) ||
+        (e.target as HTMLElement)?.isContentEditable;
+
+      // Escape: dismiss modals and drawers
+      if (e.key === 'Escape') {
+        setIsSearchOpen(false);
+        setIsNewDocOpen(false);
+        setIsImportOpen(false);
+        setIsNotesDrawerOpen(false);
+        setIsPresentationOpen(false);
+        setIsPromptsOpen(false);
+        return;
+      }
+
+      // Cmd/Ctrl + K: Toggle search
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsSearchOpen((prev) => !prev);
-      } else if (e.key === 'p' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
+      // Cmd/Ctrl + B or Cmd/Ctrl + \: Toggle left sidebar
+      if ((e.metaKey || e.ctrlKey) && (e.key.toLowerCase() === 'b' || e.key === '\\')) {
+        e.preventDefault();
+        setIsSidebarOpen((prev) => !prev);
+        return;
+      }
+
+      // Cmd/Ctrl + J: Toggle right notes/annotations drawer
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setIsNotesDrawerOpen((prev) => !prev);
+        return;
+      }
+
+      // Cmd/Ctrl + P: Print / Export PDF
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        window.print();
+        return;
+      }
+
+      // 'p' without modifier: Start presentation mode
+      if (e.key.toLowerCase() === 'p' && !e.metaKey && !e.ctrlKey && !e.altKey && !isInput) {
         if (currentDoc) {
           e.preventDefault();
           setIsPresentationOpen((prev) => !prev);
         }
-      } else if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
-        e.preventDefault();
-        setIsSidebarOpen((prev) => !prev);
       }
     };
 
@@ -214,6 +252,26 @@ export const App: React.FC = () => {
       }
     } catch (err) {
       console.error('Error creating folder:', err);
+    }
+  };
+
+  const handleRenameFolder = async (id: string, newName: string) => {
+    try {
+      const res = await fetch(`/api/folders/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, name: updated.name } : f)));
+        loadWorkspace();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to rename folder');
+      }
+    } catch (err) {
+      console.error('Error renaming folder:', err);
     }
   };
 
@@ -290,13 +348,47 @@ export const App: React.FC = () => {
   };
 
   const handleAddAnnotation = async (
-    nodeId: string,
-    selectedText: string,
-    note: string,
-    color: string,
-    occurrenceIndex: number = 0
+    nodeIdOrObj:
+      | string
+      | {
+          nodeId: string;
+          selectedText?: string;
+          note?: string;
+          color?: string;
+          occurrenceIndex?: number;
+          tableCell?: string | null;
+        },
+    selectedTextArg?: string,
+    noteArg?: string,
+    colorArg?: string,
+    occurrenceIndexArg: number = 0,
+    tableCellArg?: string | null
   ) => {
     if (!currentDoc) return;
+
+    let nodeId: string;
+    let selectedText: string;
+    let note: string;
+    let color: string;
+    let occurrenceIndex: number;
+    let tableCell: string | null | undefined;
+
+    if (typeof nodeIdOrObj === 'object' && nodeIdOrObj !== null) {
+      nodeId = nodeIdOrObj.nodeId;
+      selectedText = nodeIdOrObj.selectedText || '';
+      note = nodeIdOrObj.note || '';
+      color = nodeIdOrObj.color || 'yellow';
+      occurrenceIndex = nodeIdOrObj.occurrenceIndex ?? 0;
+      tableCell = nodeIdOrObj.tableCell;
+    } else {
+      nodeId = nodeIdOrObj;
+      selectedText = selectedTextArg || '';
+      note = noteArg || '';
+      color = colorArg || 'yellow';
+      occurrenceIndex = occurrenceIndexArg;
+      tableCell = tableCellArg;
+    }
+
     try {
       const res = await fetch(`/api/docs/${currentDoc.id}/annotation`, {
         method: 'POST',
@@ -307,6 +399,7 @@ export const App: React.FC = () => {
           note,
           color,
           occurrence_index: occurrenceIndex,
+          table_cell: tableCell,
         }),
       });
       if (res.ok) {
@@ -314,6 +407,9 @@ export const App: React.FC = () => {
         setCurrentDoc((prev) =>
           prev ? { ...prev, annotations: [...prev.annotations, newAnno] } : null
         );
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        console.error('Failed to save annotation:', res.status, errJson);
       }
     } catch (err) {
       console.error('Error adding annotation:', err);
@@ -405,6 +501,22 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleScrollToAnnotation = (annoId: string, nodeId: string) => {
+    const annoEl = document.querySelector(`[data-note-id="${annoId}"]`) as HTMLElement | null;
+    if (annoEl) {
+      annoEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      annoEl.classList.add('vmd-target-pulse', 'vmd-note-active');
+      setTimeout(() => {
+        annoEl.classList.remove('vmd-target-pulse');
+      }, 2200);
+      setTimeout(() => {
+        annoEl.classList.remove('vmd-note-active');
+      }, 4500);
+      return;
+    }
+    handleScrollToNode(nodeId);
+  };
+
   const handleSyncDataDirectory = async () => {
     try {
       const res = await fetch('/api/sync', { method: 'POST' });
@@ -464,6 +576,7 @@ export const App: React.FC = () => {
           }
         }}
         onCreateFolder={handleCreateFolder}
+        onRenameFolder={handleRenameFolder}
         onDeleteFolder={handleDeleteFolder}
         onDeleteDoc={handleDeleteDoc}
         onMoveDoc={handleMoveDoc}
@@ -524,23 +637,39 @@ export const App: React.FC = () => {
           </div>
         </div>
       ) : currentDoc ? (
-        <DocumentViewer
-          document={currentDoc}
-          theme={theme}
-          folders={folders}
-          isSidebarOpen={isSidebarOpen}
-          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-          onThemeChange={handleThemeChange}
-          onToggleBookmark={handleToggleBookmark}
-          onDeleteAnnotation={handleDeleteAnnotation}
-          onOpenNotesDrawer={() => setIsNotesDrawerOpen(true)}
-          onOpenPromptsModal={() => setIsPromptsOpen(true)}
-          onStartPresentation={() => setIsPresentationOpen(true)}
-          onUpdateTitle={handleUpdateTitle}
-          onUpdateScrollPosition={handleUpdateScrollPosition}
-          onUpdateContent={handleUpdateContent}
-          onMoveDoc={handleMoveDoc}
-        />
+        <div className="flex-1 flex min-w-0 h-full overflow-hidden relative">
+          <DocumentViewer
+            document={currentDoc}
+            theme={theme}
+            folders={folders}
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+            onThemeChange={handleThemeChange}
+            onToggleBookmark={handleToggleBookmark}
+            onDeleteAnnotation={handleDeleteAnnotation}
+            onAddAnnotation={handleAddAnnotation}
+            onOpenNotesDrawer={() => setIsNotesDrawerOpen((prev) => !prev)}
+            onOpenPromptsModal={() => setIsPromptsOpen(true)}
+            onStartPresentation={() => setIsPresentationOpen(true)}
+            onUpdateTitle={handleUpdateTitle}
+            onUpdateScrollPosition={handleUpdateScrollPosition}
+            onUpdateContent={handleUpdateContent}
+            onMoveDoc={handleMoveDoc}
+          />
+
+          {/* Bookmarks & Sticky Notes Drawer - in-flow and resizable */}
+          <NotesDrawer
+            isOpen={isNotesDrawerOpen}
+            onClose={() => setIsNotesDrawerOpen(false)}
+            docTitle={currentDoc.title}
+            bookmarks={(currentDoc.bookmarks || []).filter((b) => b.doc_id === currentDoc.id)}
+            annotations={(currentDoc.annotations || []).filter((a) => a.doc_id === currentDoc.id)}
+            onScrollToNode={handleScrollToNode}
+            onScrollToAnnotation={handleScrollToAnnotation}
+            onDeleteAnnotation={handleDeleteAnnotation}
+            onToggleBookmark={handleToggleBookmark}
+          />
+        </div>
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[var(--bg-primary)]">
           <p className="text-base font-semibold text-[var(--text-primary)] mb-2">No Document Selected</p>
@@ -560,20 +689,6 @@ export const App: React.FC = () => {
       <AnnotationToolbar
         onAddAnnotation={handleAddAnnotation}
       />
-
-      {/* Bookmarks & Sticky Notes Drawer - strictly per page */}
-      {currentDoc && (
-        <NotesDrawer
-          isOpen={isNotesDrawerOpen}
-          onClose={() => setIsNotesDrawerOpen(false)}
-          docTitle={currentDoc.title}
-          bookmarks={(currentDoc.bookmarks || []).filter((b) => b.doc_id === currentDoc.id)}
-          annotations={(currentDoc.annotations || []).filter((a) => a.doc_id === currentDoc.id)}
-          onScrollToNode={handleScrollToNode}
-          onDeleteAnnotation={handleDeleteAnnotation}
-          onToggleBookmark={handleToggleBookmark}
-        />
-      )}
 
       {/* Executive Slide Presentation Deck */}
       {isPresentationOpen && currentDoc && currentDoc.parsedDoc && (

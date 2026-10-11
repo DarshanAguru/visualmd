@@ -7,7 +7,8 @@ interface AnnotationToolbarProps {
     selectedText: string,
     note: string,
     color: string,
-    occurrenceIndex?: number
+    occurrenceIndex?: number,
+    tableCell?: string | null
   ) => void;
 }
 
@@ -18,6 +19,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   const [selectedText, setSelectedText] = useState('');
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [occurrenceIndex, setOccurrenceIndex] = useState(0);
+  const [activeTableCell, setActiveTableCell] = useState<string | null>(null);
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [noteContent, setNoteContent] = useState('');
   const [chosenColor, setChosenColor] = useState('yellow');
@@ -49,6 +51,17 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
 
+      // Check if selection is within a table cell
+      let tableCellCoord: string | null = null;
+      let checkNode: Node | null = range.startContainer;
+      while (checkNode && checkNode !== document.body) {
+        if (checkNode instanceof HTMLElement && checkNode.dataset.tableIdx !== undefined) {
+          tableCellCoord = `${checkNode.dataset.tableIdx}:${checkNode.dataset.rowIdx}:${checkNode.dataset.colIdx}`;
+          break;
+        }
+        checkNode = checkNode.parentNode;
+      }
+
       // Compute which occurrence index this selected text corresponds to in the node
       let computedOccur = 0;
       if (nodeContainer) {
@@ -77,6 +90,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
       setSelectedText(text);
       setActiveNodeId(nodeContainer?.dataset.nodeId || 'node-0');
       setOccurrenceIndex(computedOccur);
+      setActiveTableCell(tableCellCoord);
     };
 
     const handleMouseUp = () => {
@@ -106,11 +120,15 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
     { name: 'emerald', bg: 'bg-emerald-400', label: 'Emerald' },
     { name: 'sky', bg: 'bg-sky-400', label: 'Sky' },
     { name: 'rose', bg: 'bg-rose-400', label: 'Rose' },
+    { name: 'purple', bg: 'bg-purple-400', label: 'Purple' },
+    { name: 'orange', bg: 'bg-orange-400', label: 'Orange' },
+    { name: 'teal', bg: 'bg-teal-400', label: 'Teal' },
+    { name: 'coral', bg: 'bg-red-400', label: 'Coral' },
   ];
 
   const handleQuickHighlight = (color: string) => {
     if (activeNodeId) {
-      onAddAnnotation(activeNodeId, selectedText, 'Highlighted snippet', color, occurrenceIndex);
+      onAddAnnotation(activeNodeId, selectedText, 'Highlighted snippet', color, occurrenceIndex, activeTableCell);
       setPosition(null);
       setIsAddingNote(false);
       window.getSelection()?.removeAllRanges();
@@ -119,7 +137,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
 
   const handleSaveNote = () => {
     if (activeNodeId && noteContent.trim()) {
-      onAddAnnotation(activeNodeId, selectedText, noteContent.trim(), chosenColor, occurrenceIndex);
+      onAddAnnotation(activeNodeId, selectedText, noteContent.trim(), chosenColor, occurrenceIndex, activeTableCell);
       setPosition(null);
       setIsAddingNote(false);
       setNoteContent('');
@@ -135,14 +153,16 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
       {!isAddingNote ? (
         <div className="flex items-center gap-1.5">
           {/* Color highlight buttons */}
-          {colors.map((c) => (
-            <button
-              key={c.name}
-              onClick={() => handleQuickHighlight(c.name)}
-              className={`w-4 h-4 rounded-full ${c.bg} hover:scale-125 transition-transform shadow-sm`}
-              title={`Highlight in ${c.label}`}
-            />
-          ))}
+          <div className="flex items-center gap-1">
+            {colors.map((c) => (
+              <button
+                key={c.name}
+                onClick={() => handleQuickHighlight(c.name)}
+                className={`w-4 h-4 rounded-full ${c.bg} hover:scale-125 transition-transform shadow-sm`}
+                title={`Highlight in ${c.label}`}
+              />
+            ))}
+          </div>
 
           <div className="w-[1px] h-3.5 bg-[var(--border-color)] mx-1" />
 
@@ -164,17 +184,18 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           </button>
         </div>
       ) : (
-        <div className="w-64 p-1 flex flex-col gap-2">
+        <div className="w-72 p-1 flex flex-col gap-2">
           <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
             <span>Add Note to Selection</span>
-            <div className="flex gap-1">
+            <div className="flex gap-1 flex-wrap max-w-[140px] justify-end">
               {colors.map((c) => (
                 <button
                   key={c.name}
                   onClick={() => setChosenColor(c.name)}
-                  className={`w-3.5 h-3.5 rounded-full ${c.bg} ${
-                    chosenColor === c.name ? 'ring-2 ring-blue-500 ring-offset-1' : ''
+                  className={`w-3.5 h-3.5 rounded-full ${c.bg} transition-transform ${
+                    chosenColor === c.name ? 'ring-2 ring-blue-500 ring-offset-1 scale-110' : 'hover:scale-110'
                   }`}
+                  title={c.label}
                 />
               ))}
             </div>

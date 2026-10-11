@@ -530,15 +530,25 @@ body.theme-retro .markdown-body,
   border-radius: 0.75rem;
   border: 1px solid var(--border-color);
   background-color: var(--bg-card);
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.markdown-body .vmd-table-header {
+  border-top-left-radius: 0.75rem;
+  border-top-right-radius: 0.75rem;
+}
+
+.markdown-body .vmd-table-footer {
+  border-bottom-left-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
 }
 
 .markdown-body .vmd-table-scroll-container {
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: var(--border-color) transparent;
@@ -769,6 +779,22 @@ mark.vmd-highlight-rose {
   background-color: rgba(251, 113, 133, 0.35);
   border-bottom: 2px solid #f43f5e;
 }
+mark.vmd-highlight-purple {
+  background-color: rgba(192, 132, 252, 0.35);
+  border-bottom: 2px solid #a855f7;
+}
+mark.vmd-highlight-orange {
+  background-color: rgba(251, 146, 60, 0.35);
+  border-bottom: 2px solid #ea580c;
+}
+mark.vmd-highlight-teal {
+  background-color: rgba(45, 212, 191, 0.35);
+  border-bottom: 2px solid #0d9488;
+}
+mark.vmd-highlight-coral {
+  background-color: rgba(248, 113, 113, 0.35);
+  border-bottom: 2px solid #dc2626;
+}
 
 /* Sticky Note In-Text Box */
 .vmd-note-box {
@@ -779,6 +805,24 @@ mark.vmd-highlight-rose {
   margin: 0 2px;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.vmd-cell-badge {
+  position: relative;
+  z-index: 10;
+}
+
+.vmd-note-box:hover,
+.vmd-note-box.vmd-note-active,
+.vmd-cell-badge:hover,
+.vmd-cell-badge.vmd-note-active {
+  z-index: 99999 !important;
+  position: relative !important;
+}
+
+.vmd-floating-note-tooltip {
+  filter: drop-shadow(0 20px 35px rgba(0, 0, 0, 0.35));
+  z-index: 9999999 !important;
 }
 .vmd-note-box.vmd-note-yellow {
   border: 1.5px dashed #f59e0b;
@@ -796,6 +840,22 @@ mark.vmd-highlight-rose {
   border: 1.5px dashed #f43f5e;
   background-color: rgba(244, 63, 94, 0.15);
 }
+.vmd-note-box.vmd-note-purple {
+  border: 1.5px dashed #a855f7;
+  background-color: rgba(168, 85, 247, 0.15);
+}
+.vmd-note-box.vmd-note-orange {
+  border: 1.5px dashed #ea580c;
+  background-color: rgba(234, 88, 12, 0.15);
+}
+.vmd-note-box.vmd-note-teal {
+  border: 1.5px dashed #0d9488;
+  background-color: rgba(13, 148, 136, 0.15);
+}
+.vmd-note-box.vmd-note-coral {
+  border: 1.5px dashed #dc2626;
+  background-color: rgba(220, 38, 38, 0.15);
+}
 
 .vmd-note-badge {
   font-size: 11px;
@@ -804,30 +864,61 @@ mark.vmd-highlight-rose {
   opacity: 0.85;
 }
 
-/* Hover Tooltip for Notes */
+/* Hover & Active Tooltip for Notes - Always floats on top of all widgets */
 .vmd-note-tooltip {
   display: none;
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 100;
-  min-width: 220px;
-  max-width: 320px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  z-index: 999999 !important;
+  min-width: 240px;
+  max-width: min(380px, 90vw);
+  padding: 12px 14px;
+  border-radius: 12px;
   background-color: var(--bg-card);
   color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1.5px solid var(--border-color);
+  box-shadow: 0 20px 35px -5px rgba(0, 0, 0, 0.4), 0 10px 15px -5px rgba(0, 0, 0, 0.2);
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
   white-space: normal;
+  pointer-events: auto;
+  font-family: inherit;
+  font-weight: normal;
+  text-align: left;
 }
 
-.vmd-note-box:hover .vmd-note-tooltip {
+.vmd-note-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--border-color) transparent transparent transparent;
+}
+
+.vmd-note-box:hover .vmd-note-tooltip,
+.vmd-note-box.vmd-note-active .vmd-note-tooltip,
+.vmd-cell-badge:hover .vmd-note-tooltip,
+.vmd-cell-badge.vmd-note-active .vmd-note-tooltip {
   display: block;
   animation: vmdFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Elevate parent stacking contexts when any child note is hovered or active */
+.markdown-body :has(.vmd-note-box:hover),
+.markdown-body :has(.vmd-note-box.vmd-note-active),
+.markdown-body :has(.vmd-cell-badge:hover),
+.markdown-body :has(.vmd-cell-badge.vmd-note-active),
+div[data-node-id]:has(.vmd-note-box:hover),
+div[data-node-id]:has(.vmd-note-box.vmd-note-active),
+div[data-node-id]:has(.vmd-cell-badge:hover),
+div[data-node-id]:has(.vmd-cell-badge.vmd-note-active) {
+  z-index: 9999 !important;
+  position: relative !important;
 }
 
 .vmd-tooltip-header {
@@ -865,3 +956,128 @@ mark.vmd-highlight-rose {
     transform: translate(-50%, 0);
   }
 }
+
+/* Deep link target focus pulse */
+@keyframes vmdTargetPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    outline: 2px solid #3b82f6;
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.3);
+    outline: 3px solid #60a5fa;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    outline: 2px solid transparent;
+  }
+}
+
+.vmd-target-pulse {
+  animation: vmdTargetPulse 2s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  border-radius: 6px;
+}
+
+/* Table cell annotation highlight */
+td.vmd-cell-annotated {
+  position: relative;
+  background-color: color-mix(in srgb, var(--accent-surface) 60%, transparent) !important;
+  border-left: 3px solid var(--accent) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease;
+}
+
+td.vmd-cell-annotated:hover,
+td.vmd-cell-annotated.vmd-note-active,
+.vmd-note-box.vmd-note-active {
+  background-color: color-mix(in srgb, var(--accent-surface) 90%, transparent) !important;
+  outline: 2.5px solid var(--accent) !important;
+  outline-offset: -1px;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent) !important;
+}
+
+/* Component Level Note Card */
+.vmd-component-note {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+/* ============================================================
+   Enterprise Clean Print & PDF Export Engine
+   ============================================================ */
+@media print {
+  @page {
+    margin: 1.8cm 1.5cm;
+    size: auto;
+  }
+
+  body,
+  .vmd-app,
+  .vmd-document-bg {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+    height: auto !important;
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Hide interactive controls, sidebars, drawers, floating toolbars */
+  aside,
+  header,
+  .vmd-annotation-toolbar,
+  .vmd-note-tooltip,
+  .vmd-table-header button,
+  .vmd-table-footer,
+  .vmd-copy-code-btn,
+  .vmd-table-scroll-hint,
+  button,
+  .group:hover .opacity-0,
+  [data-delete-id],
+  .fixed,
+  .vmd-cell-badge {
+    display: none !important;
+  }
+
+  /* Ensure document scroll container expands for full page print */
+  .overflow-y-auto,
+  .overflow-x-hidden,
+  .overflow-hidden {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+
+  /* Page break rules for clean document structure */
+  h1, h2, h3 {
+    page-break-after: avoid;
+    break-after: avoid;
+    color: #0f172a !important;
+  }
+
+  pre,
+  table,
+  .vmd-table-wrapper,
+  .vmd-callout-box,
+  .vmd-stepper,
+  .vmd-component-note {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    background: #f8fafc !important;
+    color: #0f172a !important;
+  }
+
+  mark.vmd-highlight {
+    background-color: #fef08a !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+

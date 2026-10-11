@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { QuizNode } from '@visualmd/compiler';
-import { HelpCircle, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { HelpCircle, Check, X, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 
 interface QuizBoxProps {
   node: QuizNode;
@@ -20,11 +20,26 @@ export const QuizBox: React.FC<QuizBoxProps> = ({ node }) => {
   return (
     <div className="my-6 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] shadow-xs overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-color)]">
-        <HelpCircle className="w-4 h-4 text-emerald-500" />
-        <h4 className="font-semibold text-[var(--text-primary)]" style={{ fontSize: 'calc(0.9375rem * var(--vmd-font-scale, 1))' }}>
-          Knowledge Check: {node.question}
-        </h4>
+      <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-color)]">
+        <div className="flex items-center gap-2">
+          <HelpCircle className="w-4 h-4 text-emerald-500" />
+          <h4 className="font-semibold text-[var(--text-primary)]" style={{ fontSize: 'calc(0.9375rem * var(--vmd-font-scale, 1))' }}>
+            Knowledge Check: {node.question}
+          </h4>
+        </div>
+        {hasAnswered && (
+          <button
+            onClick={() => {
+              setSelectedIdx(null);
+              setShowExplanation(false);
+            }}
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer select-none"
+            title="Reset quiz and try again"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Try Again</span>
+          </button>
+        )}
       </div>
 
       {/* Options */}

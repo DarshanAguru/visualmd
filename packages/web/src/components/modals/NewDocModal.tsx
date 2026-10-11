@@ -25,7 +25,7 @@ const SYNTAX_SNIPPETS = [
   {
     name: '$CALLOUT$',
     desc: 'Highlighted callout card (tip, warning, insight, note)',
-    snippet: `$CALLOUT$S?type=insight&title=Key+Takeaway\nAdd your important conceptual note or warning here.\n`,
+    snippet: `$CALLOUT$S?type=insight&title=Key+Takeaway\nAdd your important conceptual note or warning here.\n$CALLOUT$E\n`,
   },
   {
     name: '$STEPPER$',

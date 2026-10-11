@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ChevronDown,
   X,
+  Edit2,
 } from 'lucide-react';
 import { VisualMDLogo } from '../brand/VisualMDLogo';
 
@@ -28,6 +29,7 @@ interface SidebarProps {
   onSelectFolder: (folderId: string | null) => void;
   onSelectDoc: (docId: string) => void;
   onCreateFolder: (name: string) => void;
+  onRenameFolder?: (id: string, newName: string) => void;
   onDeleteFolder: (id: string) => void;
   onDeleteDoc: (id: string) => void;
   onMoveDoc?: (docId: string, folderId: string | null) => void;
@@ -47,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectFolder,
   onSelectDoc,
   onCreateFolder,
+  onRenameFolder,
   onDeleteFolder,
   onDeleteDoc,
   onMoveDoc,
@@ -57,6 +60,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [newFolderName, setNewFolderName] = useState('');
   const [isAddingFolder, setIsAddingFolder] = useState(false);
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [editingFolderName, setEditingFolderName] = useState('');
   const [filterText, setFilterText] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -383,11 +388,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ) : (
                     <FolderIcon className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                   )}
-                  <span className="truncate font-medium">{folder.name}</span>
+                  {editingFolderId === folder.id ? (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (editingFolderName.trim() && editingFolderName.trim() !== folder.name && onRenameFolder) {
+                          onRenameFolder(folder.id, editingFolderName.trim());
+                        }
+                        setEditingFolderId(null);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-1 min-w-0 mr-1"
+                    >
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editingFolderName}
+                        onChange={(e) => setEditingFolderName(e.target.value)}
+                        onBlur={() => {
+                          if (editingFolderName.trim() && editingFolderName.trim() !== folder.name && onRenameFolder) {
+                            onRenameFolder(folder.id, editingFolderName.trim());
+                          }
+                          setEditingFolderId(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            e.stopPropagation();
+                            setEditingFolderId(null);
+                          }
+                        }}
+                        className="w-full bg-[var(--bg-card)] border border-blue-500 rounded px-1.5 py-0.5 text-xs text-[var(--text-primary)] focus:outline-none"
+                      />
+                    </form>
+                  ) : (
+                    <span className="truncate font-medium">{folder.name}</span>
+                  )}
                 </div>
 
                 {/* Folder Hover Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingFolderId(folder.id);
+                      setEditingFolderName(folder.name);
+                    }}
+                    className="p-0.5 hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-tertiary)]"
+                    title="Rename folder"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
