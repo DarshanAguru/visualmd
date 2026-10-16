@@ -1,0 +1,8 @@
+# Ensure cross-platform line ending consistency across Windows, macOS, and Linux
+* text=auto
+
+# Executable binaries and shell scripts must strictly use LF line endings
+packages/server/bin/visualmd.js text eol=lf
+scripts/*.mjs text eol=lf
+*.sh text eol=lf
+*.bash text eol=lf

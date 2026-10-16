@@ -1,0 +1,1173 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   VisualMD Core Design Tokens & Theme Palettes
+   Defined as top-level CSS to guarantee zero purging during production build.
+   ========================================================================== */
+
+:root {
+  --vmd-font-scale: 1;
+
+  /* Default Light: Minimal Editorial */
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafafa;
+  --bg-tertiary: #f4f4f5;
+  --bg-sidebar: #f7f7f8;
+  --bg-card: #ffffff;
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
+  --border-color: #e4e4e7;
+  --border-muted: #f4f4f5;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-surface: rgba(37, 99, 235, 0.08);
+  --code-bg: #f4f4f5;
+  --code-header: #ebebef;
+  --code-text: #09090b;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 1. Editorial Light (Default Crisp Clean) */
+[data-theme="light"],
+[data-theme="editorial"],
+[data-theme="minimal-light"],
+body.theme-light,
+body.theme-editorial,
+body.theme-minimal-light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafafa;
+  --bg-tertiary: #f4f4f5;
+  --bg-sidebar: #f7f7f8;
+  --bg-card: #ffffff;
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
+  --border-color: #e4e4e7;
+  --border-muted: #f4f4f5;
+  --accent: #18181b;
+  --accent-hover: #27272a;
+  --accent-surface: #f4f4f5;
+  --code-bg: #f4f4f5;
+  --code-header: #ebebef;
+  --code-text: #09090b;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 2. Obsidian Dark (Modern Dark - Deep Zinc) */
+[data-theme="dark"],
+[data-theme="obsidian"],
+body.theme-dark,
+body.theme-obsidian {
+  --bg-primary: #09090b;
+  --bg-secondary: #121215;
+  --bg-tertiary: #18181b;
+  --bg-sidebar: #0e0e11;
+  --bg-card: #121215;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --border-color: #27272a;
+  --border-muted: #1c1c1f;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-surface: rgba(59, 130, 246, 0.12);
+  --code-bg: #0f0f12;
+  --code-header: #18181c;
+  --code-text: #f4f4f5;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 3. Midnight Navy (Deep Oceanic Space) */
+[data-theme="midnight"],
+body.theme-midnight {
+  --bg-primary: #0b0f19;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1f2937;
+  --bg-sidebar: #0d121f;
+  --bg-card: #111827;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border-color: #1e293b;
+  --border-muted: #162032;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-surface: rgba(99, 102, 241, 0.15);
+  --code-bg: #0d121f;
+  --code-header: #162032;
+  --code-text: #f8fafc;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 4. Tokyo Night (Cyber Indigo & Soft Violet/Cyan) */
+[data-theme="tokyo"],
+body.theme-tokyo {
+  --bg-primary: #1a1b26;
+  --bg-secondary: #1f2335;
+  --bg-tertiary: #24283b;
+  --bg-sidebar: #16161e;
+  --bg-card: #1f2335;
+  --text-primary: #c0caf5;
+  --text-secondary: #9aa5ce;
+  --text-muted: #565f89;
+  --border-color: #292e42;
+  --border-muted: #1f2335;
+  --accent: #7aa2f7;
+  --accent-hover: #bb9af7;
+  --accent-surface: rgba(122, 162, 247, 0.14);
+  --code-bg: #16161e;
+  --code-header: #24283b;
+  --code-text: #c0caf5;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 5. Dracula Velvet (Vampire Purple & Neon Highlights) */
+[data-theme="dracula"],
+body.theme-dracula {
+  --bg-primary: #282a36;
+  --bg-secondary: #343746;
+  --bg-tertiary: #44475a;
+  --bg-sidebar: #21222c;
+  --bg-card: #343746;
+  --text-primary: #f8f8f2;
+  --text-secondary: #bfbfb8;
+  --text-muted: #6272a4;
+  --border-color: #44475a;
+  --border-muted: #383a48;
+  --accent: #bd93f9;
+  --accent-hover: #ff79c6;
+  --accent-surface: rgba(189, 147, 249, 0.15);
+  --code-bg: #21222c;
+  --code-header: #383a48;
+  --code-text: #f8f8f2;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 6. Forest Dark (Deep Emerald Pine) */
+[data-theme="forest"],
+body.theme-forest {
+  --bg-primary: #0c1512;
+  --bg-secondary: #13221e;
+  --bg-tertiary: #192e28;
+  --bg-sidebar: #09100e;
+  --bg-card: #13221e;
+  --text-primary: #e6f1ed;
+  --text-secondary: #9dbbb1;
+  --text-muted: #57786e;
+  --border-color: #1f3a33;
+  --border-muted: #152722;
+  --accent: #10b981;
+  --accent-hover: #34d399;
+  --accent-surface: rgba(16, 185, 129, 0.15);
+  --code-bg: #09100e;
+  --code-header: #192e28;
+  --code-text: #e6f1ed;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 7. Nord Arctic (Polar Slate & Ice Blue) */
+[data-theme="nord"],
+body.theme-nord {
+  --bg-primary: #242933;
+  --bg-secondary: #2e3440;
+  --bg-tertiary: #3b4252;
+  --bg-sidebar: #1f232c;
+  --bg-card: #2e3440;
+  --text-primary: #eceff4;
+  --text-secondary: #d8dee9;
+  --text-muted: #616e88;
+  --border-color: #3b4252;
+  --border-muted: #2d333f;
+  --accent: #88c0d0;
+  --accent-hover: #81a1c1;
+  --accent-surface: rgba(136, 192, 208, 0.15);
+  --code-bg: #1e222a;
+  --code-header: #282d38;
+  --code-text: #eceff4;
+  --font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* 8. Retro CRT Terminal (Phosphor Amber on Charcoal) */
+[data-theme="retro"],
+body.theme-retro {
+  --bg-primary: #0c0d0e;
+  --bg-secondary: #141618;
+  --bg-tertiary: #1c1e22;
+  --bg-sidebar: #0f1012;
+  --bg-card: #141618;
+  --text-primary: #fbbf24;
+  --text-secondary: #d97706;
+  --text-muted: #78350f;
+  --border-color: #2b1f06;
+  --border-muted: #1d1403;
+  --accent: #f59e0b;
+  --accent-hover: #fbbf24;
+  --accent-surface: rgba(245, 158, 11, 0.15);
+  --code-bg: #070808;
+  --code-header: #171203;
+  --code-text: #fbbf24;
+  --font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* 9. Authentic Ruled Notebook (Rich Cream Parchment & Fountain Pen Ink) */
+[data-theme="notebook"],
+body.theme-notebook {
+  --bg-primary: #fbf7ee;
+  --bg-secondary: #f4eedd;
+  --bg-tertiary: #ede4d1;
+  --bg-sidebar: #f5eedc;
+  --bg-card: #fffdf8;
+  --text-primary: #2d241e;
+  --text-secondary: #5e5043;
+  --text-muted: #8c7b6c;
+  --border-color: #e5dac1;
+  --border-muted: #ece3cf;
+  --accent: #b45309;
+  --accent-hover: #92400e;
+  --accent-surface: rgba(180, 83, 9, 0.1);
+  --code-bg: #f5eedb;
+  --code-header: #ece3ce;
+  --code-text: #2d241e;
+  --font-family: 'Newsreader', 'Lora', Georgia, serif;
+}
+
+/* 10. Warm Literary Sepia (Antique Library Paper) */
+[data-theme="sepia"],
+body.theme-sepia {
+  --bg-primary: #f4ecd8;
+  --bg-secondary: #ece2c9;
+  --bg-tertiary: #e3d6b8;
+  --bg-sidebar: #e8dfc5;
+  --bg-card: #f9f4e6;
+  --text-primary: #342516;
+  --text-secondary: #634d35;
+  --text-muted: #8c7358;
+  --border-color: #dfd0af;
+  --border-muted: #e7dac0;
+  --accent: #9a3412;
+  --accent-hover: #7c2d12;
+  --accent-surface: rgba(154, 52, 18, 0.1);
+  --code-bg: #ede3ca;
+  --code-header: #e2d5b6;
+  --code-text: #342516;
+  --font-family: 'Newsreader', 'Lora', Georgia, serif;
+}
+
+/* 11. Minimal Clean Paper (Soft Neutral Eggshell) */
+[data-theme="paper"],
+body.theme-paper {
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #f1f3f5;
+  --bg-tertiary: #e9ecef;
+  --bg-sidebar: #f3f4f6;
+  --bg-card: #ffffff;
+  --text-primary: #212529;
+  --text-secondary: #495057;
+  --text-muted: #6c757d;
+  --border-color: #dee2e6;
+  --border-muted: #e9ecef;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-surface: rgba(37, 99, 235, 0.08);
+  --code-bg: #f1f3f5;
+  --code-header: #e9ecef;
+  --code-text: #212529;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ==========================================================================
+   Global Base & Layout Elements
+   ========================================================================== */
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  min-height: 100vh;
+}
+
+/* Authentic Paper Grain / Texture for Notebook */
+body.theme-notebook .vmd-document-bg,
+[data-theme="notebook"] .vmd-document-bg {
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 27px,
+    rgba(229, 218, 193, 0.45) 28px
+  );
+  background-size: 100% 28px;
+}
+
+/* CRT Scanline subtle ambiance for Retro */
+body.theme-retro .vmd-document-bg,
+[data-theme="retro"] .vmd-document-bg {
+  background-image: linear-gradient(
+    rgba(12, 13, 14, 0) 50%,
+    rgba(0, 0, 0, 0.3) 50%
+  );
+  background-size: 100% 4px;
+}
+
+/* Global Component Theme Classes */
+.vmd-app {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.vmd-sidebar {
+  background-color: var(--bg-sidebar);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.vmd-header {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.vmd-card {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.vmd-surface {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+.vmd-surface-elevated {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
+
+.vmd-border {
+  border-color: var(--border-color) !important;
+}
+
+.vmd-border-muted {
+  border-color: var(--border-muted) !important;
+}
+
+.vmd-text {
+  color: var(--text-primary) !important;
+}
+
+.vmd-text-muted {
+  color: var(--text-secondary) !important;
+}
+
+.vmd-text-subtle {
+  color: var(--text-muted) !important;
+}
+
+.vmd-code-bg {
+  background-color: var(--code-bg) !important;
+}
+
+.vmd-code-header {
+  background-color: var(--code-header) !important;
+}
+
+/* Custom Minimal Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ==========================================================================
+   Typography & Scalable Document Content
+   Controlled dynamically by --vmd-font-scale Custom Property
+   ========================================================================== */
+
+body.theme-notebook .markdown-body,
+[data-theme="notebook"] .markdown-body,
+body.theme-sepia .markdown-body,
+[data-theme="sepia"] .markdown-body {
+  font-family: 'Newsreader', 'Lora', Georgia, serif;
+  line-height: calc(1.85 * var(--vmd-font-scale, 1));
+}
+
+body.theme-retro .markdown-body,
+[data-theme="retro"] .markdown-body {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  text-shadow: 0 0 2px rgba(245, 158, 11, 0.4);
+}
+
+/* VisualMD Markdown Content Styling */
+.markdown-body {
+  color: var(--text-primary) !important;
+  font-size: calc(1rem * var(--vmd-font-scale, 1)) !important;
+  line-height: calc(1.75 * var(--vmd-font-scale, 1)) !important;
+  transition: font-size 0.15s ease, line-height 0.15s ease;
+}
+
+.markdown-body h1 {
+  font-size: calc(2.25rem * var(--vmd-font-scale, 1)) !important;
+  font-weight: 700;
+  margin-top: calc(1.75rem * var(--vmd-font-scale, 1));
+  margin-bottom: calc(0.75rem * var(--vmd-font-scale, 1));
+  line-height: 1.25 !important;
+  letter-spacing: -0.02em;
+  color: var(--text-primary) !important;
+}
+
+.markdown-body h2 {
+  font-size: calc(1.5rem * var(--vmd-font-scale, 1)) !important;
+  font-weight: 600;
+  margin-top: calc(1.5rem * var(--vmd-font-scale, 1));
+  margin-bottom: calc(0.5rem * var(--vmd-font-scale, 1));
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: calc(0.35rem * var(--vmd-font-scale, 1));
+  letter-spacing: -0.01em;
+  color: var(--text-primary) !important;
+}
+
+.markdown-body h3 {
+  font-size: calc(1.25rem * var(--vmd-font-scale, 1)) !important;
+  font-weight: 600;
+  margin-top: calc(1.25rem * var(--vmd-font-scale, 1));
+  margin-bottom: calc(0.5rem * var(--vmd-font-scale, 1));
+  color: var(--text-primary) !important;
+}
+
+.markdown-body h4 {
+  font-size: calc(1.05rem * var(--vmd-font-scale, 1)) !important;
+  font-weight: 600;
+  margin-top: calc(1rem * var(--vmd-font-scale, 1));
+  margin-bottom: calc(0.35rem * var(--vmd-font-scale, 1));
+  color: var(--text-primary) !important;
+}
+
+.markdown-body p {
+  font-size: calc(1rem * var(--vmd-font-scale, 1)) !important;
+  margin-bottom: calc(1rem * var(--vmd-font-scale, 1));
+  line-height: calc(1.75 * var(--vmd-font-scale, 1)) !important;
+  color: var(--text-primary) !important;
+}
+
+.markdown-body ul, .markdown-body ol {
+  font-size: calc(1rem * var(--vmd-font-scale, 1)) !important;
+  margin-bottom: calc(1rem * var(--vmd-font-scale, 1));
+  padding-left: 1.5rem;
+  color: var(--text-primary) !important;
+}
+
+.markdown-body ul {
+  list-style-type: disc;
+}
+
+.markdown-body ol {
+  list-style-type: decimal;
+}
+
+.markdown-body li {
+  font-size: calc(1rem * var(--vmd-font-scale, 1)) !important;
+  margin-bottom: calc(0.35rem * var(--vmd-font-scale, 1));
+  line-height: calc(1.65 * var(--vmd-font-scale, 1)) !important;
+  color: var(--text-primary) !important;
+}
+
+.markdown-body a {
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--accent-surface);
+  text-underline-offset: 3px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.markdown-body a:hover {
+  text-decoration-color: var(--accent);
+  opacity: 0.85;
+}
+
+.markdown-body blockquote {
+  font-size: calc(0.95rem * var(--vmd-font-scale, 1)) !important;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--accent);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1.15rem;
+  margin-top: 0.75rem;
+  margin-bottom: calc(1.15rem * var(--vmd-font-scale, 1));
+  color: var(--text-primary) !important;
+  font-style: normal;
+  line-height: calc(1.65 * var(--vmd-font-scale, 1));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.markdown-body blockquote p {
+  margin-bottom: 0.4rem;
+}
+
+.markdown-body blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body .vmd-table-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 1.25rem;
+  margin-bottom: 1.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  overflow: visible;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.markdown-body .vmd-table-header {
+  border-top-left-radius: 0.75rem;
+  border-top-right-radius: 0.75rem;
+}
+
+.markdown-body .vmd-table-footer {
+  border-bottom-left-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+}
+
+.markdown-body .vmd-table-scroll-container {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.markdown-body .vmd-table-scroll-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.markdown-body .vmd-table-scroll-container::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.markdown-body .vmd-table-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 9999px;
+}
+
+.markdown-body .vmd-table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.markdown-body table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(0.875rem * var(--vmd-font-scale, 1)) !important;
+  margin: 0 !important;
+}
+
+.markdown-body th, .markdown-body td {
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  padding: calc(0.65rem * var(--vmd-font-scale, 1)) calc(0.95rem * var(--vmd-font-scale, 1));
+  text-align: left;
+  vertical-align: top;
+  font-size: calc(0.875rem * var(--vmd-font-scale, 1)) !important;
+  color: var(--text-primary) !important;
+  position: relative;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.5;
+  min-width: 110px;
+  max-width: 480px;
+}
+
+.markdown-body th:last-child, .markdown-body td:last-child {
+  border-right: none;
+}
+
+.markdown-body tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-body th {
+  background-color: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--text-primary) !important;
+  border-bottom: 2px solid var(--border-color);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.markdown-body tbody tr:nth-child(even) {
+  background-color: color-mix(in srgb, var(--bg-secondary) 35%, transparent);
+}
+
+.markdown-body tbody tr:hover {
+  background-color: color-mix(in srgb, var(--accent-surface) 40%, transparent);
+}
+
+.markdown-body td.vmd-table-cell:hover {
+  background-color: color-mix(in srgb, var(--accent-surface) 80%, transparent) !important;
+  outline: 1.5px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.markdown-body td a {
+  color: var(--accent);
+  word-break: break-all;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-body td code {
+  word-break: break-all;
+  font-size: 0.82em;
+}
+
+.markdown-body td p {
+  margin: 0.25rem 0;
+}
+
+.markdown-body td p:first-child {
+  margin-top: 0;
+}
+
+.markdown-body td p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body pre {
+  background-color: var(--code-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  padding: calc(1rem * var(--vmd-font-scale, 1));
+  overflow-x: auto;
+  margin-top: 1rem;
+  margin-bottom: 1.25rem;
+  font-size: calc(0.875rem * var(--vmd-font-scale, 1)) !important;
+  position: relative;
+}
+
+.markdown-body pre code {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  font-size: calc(0.8125rem * var(--vmd-font-scale, 1)) !important;
+  color: var(--code-text) !important;
+  line-height: 1.6;
+}
+
+.markdown-body code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: calc(0.85em * var(--vmd-font-scale, 1)) !important;
+  background-color: var(--accent-surface);
+  color: var(--accent) !important;
+  padding: 0.15rem 0.375rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-color);
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+
+/* Checklists / Task lists */
+.markdown-body li:has(input[type="checkbox"]),
+.markdown-body li.vmd-task-item {
+  list-style: none !important;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-left: -1rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.markdown-body li:has(input[type="checkbox"]):hover,
+.markdown-body li.vmd-task-item:hover {
+  background-color: var(--accent-surface);
+}
+
+.markdown-body li:has(input[type="checkbox"]:checked) {
+  color: var(--text-muted) !important;
+}
+
+.markdown-body input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: calc(1.1rem * var(--vmd-font-scale, 1));
+  height: calc(1.1rem * var(--vmd-font-scale, 1));
+  border: 1.5px solid var(--border-color);
+  border-radius: 0.3rem;
+  vertical-align: middle;
+  margin-right: 0.5rem;
+  margin-top: 0.2rem;
+  position: relative;
+  background: var(--bg-card);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.markdown-body input[type="checkbox"]:hover {
+  border-color: var(--accent);
+}
+
+.markdown-body input[type="checkbox"]:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.markdown-body input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  color: #ffffff;
+  font-size: calc(0.75rem * var(--vmd-font-scale, 1));
+  font-weight: 800;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* ==========================================================================
+   Annotations & Highlights
+   ========================================================================== */
+
+mark.vmd-highlight {
+  border-radius: 3px;
+  padding: 1px 3px;
+  margin: 0 1px;
+  color: inherit;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  display: inline;
+}
+mark.vmd-highlight-yellow {
+  background-color: rgba(250, 204, 21, 0.35);
+  border-bottom: 2px solid #eab308;
+}
+mark.vmd-highlight-emerald {
+  background-color: rgba(52, 211, 153, 0.35);
+  border-bottom: 2px solid #10b981;
+}
+mark.vmd-highlight-sky {
+  background-color: rgba(56, 189, 248, 0.35);
+  border-bottom: 2px solid #0284c7;
+}
+mark.vmd-highlight-rose {
+  background-color: rgba(251, 113, 133, 0.35);
+  border-bottom: 2px solid #f43f5e;
+}
+mark.vmd-highlight-purple {
+  background-color: rgba(192, 132, 252, 0.35);
+  border-bottom: 2px solid #a855f7;
+}
+mark.vmd-highlight-orange {
+  background-color: rgba(251, 146, 60, 0.35);
+  border-bottom: 2px solid #ea580c;
+}
+mark.vmd-highlight-teal {
+  background-color: rgba(45, 212, 191, 0.35);
+  border-bottom: 2px solid #0d9488;
+}
+mark.vmd-highlight-coral {
+  background-color: rgba(248, 113, 113, 0.35);
+  border-bottom: 2px solid #dc2626;
+}
+
+/* Sticky Note In-Text Box */
+.vmd-note-box {
+  position: relative;
+  display: inline;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin: 0 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.vmd-cell-badge {
+  position: relative;
+  z-index: 10;
+}
+
+.vmd-note-box:hover,
+.vmd-note-box.vmd-note-active,
+.vmd-cell-badge:hover,
+.vmd-cell-badge.vmd-note-active {
+  z-index: 99999 !important;
+  position: relative !important;
+}
+
+.vmd-floating-note-tooltip {
+  filter: drop-shadow(0 20px 35px rgba(0, 0, 0, 0.35));
+  z-index: 9999999 !important;
+}
+.vmd-note-box.vmd-note-yellow {
+  border: 1.5px dashed #f59e0b;
+  background-color: rgba(245, 158, 11, 0.15);
+}
+.vmd-note-box.vmd-note-emerald {
+  border: 1.5px dashed #10b981;
+  background-color: rgba(16, 185, 129, 0.15);
+}
+.vmd-note-box.vmd-note-sky {
+  border: 1.5px dashed #38bdf8;
+  background-color: rgba(56, 189, 248, 0.15);
+}
+.vmd-note-box.vmd-note-rose {
+  border: 1.5px dashed #f43f5e;
+  background-color: rgba(244, 63, 94, 0.15);
+}
+.vmd-note-box.vmd-note-purple {
+  border: 1.5px dashed #a855f7;
+  background-color: rgba(168, 85, 247, 0.15);
+}
+.vmd-note-box.vmd-note-orange {
+  border: 1.5px dashed #ea580c;
+  background-color: rgba(234, 88, 12, 0.15);
+}
+.vmd-note-box.vmd-note-teal {
+  border: 1.5px dashed #0d9488;
+  background-color: rgba(13, 148, 136, 0.15);
+}
+.vmd-note-box.vmd-note-coral {
+  border: 1.5px dashed #dc2626;
+  background-color: rgba(220, 38, 38, 0.15);
+}
+
+.vmd-note-badge {
+  font-size: 11px;
+  margin-left: 3px;
+  vertical-align: super;
+  opacity: 0.85;
+}
+
+/* Hover & Active Tooltip for Notes - Always floats on top of all widgets */
+.vmd-note-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999999 !important;
+  min-width: 240px;
+  max-width: min(380px, 90vw);
+  padding: 12px 14px;
+  border-radius: 12px;
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1.5px solid var(--border-color);
+  box-shadow: 0 20px 35px -5px rgba(0, 0, 0, 0.4), 0 10px 15px -5px rgba(0, 0, 0, 0.2);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  pointer-events: auto;
+  font-family: inherit;
+  font-weight: normal;
+  text-align: left;
+}
+
+.vmd-note-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--border-color) transparent transparent transparent;
+}
+
+.vmd-note-box:hover .vmd-note-tooltip,
+.vmd-note-box.vmd-note-active .vmd-note-tooltip,
+.vmd-cell-badge:hover .vmd-note-tooltip,
+.vmd-cell-badge.vmd-note-active .vmd-note-tooltip {
+  display: block;
+  animation: vmdFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Elevate parent stacking contexts when any child note is hovered or active */
+.markdown-body :has(.vmd-note-box:hover),
+.markdown-body :has(.vmd-note-box.vmd-note-active),
+.markdown-body :has(.vmd-cell-badge:hover),
+.markdown-body :has(.vmd-cell-badge.vmd-note-active),
+div[data-node-id]:has(.vmd-note-box:hover),
+div[data-node-id]:has(.vmd-note-box.vmd-note-active),
+div[data-node-id]:has(.vmd-cell-badge:hover),
+div[data-node-id]:has(.vmd-cell-badge.vmd-note-active) {
+  z-index: 9999 !important;
+  position: relative !important;
+}
+
+.vmd-tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.vmd-tooltip-delete {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.vmd-tooltip-delete:hover {
+  background-color: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+
+@keyframes vmdFadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* Deep link target focus pulse */
+@keyframes vmdTargetPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    outline: 2px solid #3b82f6;
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.3);
+    outline: 3px solid #60a5fa;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    outline: 2px solid transparent;
+  }
+}
+
+.vmd-target-pulse {
+  animation: vmdTargetPulse 2s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  border-radius: 6px;
+}
+
+/* Table cell annotation highlight */
+td.vmd-cell-annotated {
+  position: relative;
+  background-color: color-mix(in srgb, var(--accent-surface) 60%, transparent) !important;
+  border-left: 3px solid var(--accent) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease;
+}
+
+td.vmd-cell-annotated:hover,
+td.vmd-cell-annotated.vmd-note-active,
+.vmd-note-box.vmd-note-active {
+  background-color: color-mix(in srgb, var(--accent-surface) 90%, transparent) !important;
+  outline: 2.5px solid var(--accent) !important;
+  outline-offset: -1px;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent) !important;
+}
+
+/* Component Level Note Card */
+.vmd-component-note {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+/* ============================================================
+   Enterprise Clean Print & PDF Export Engine
+   ============================================================ */
+@media print {
+  @page {
+    margin: 1.8cm 1.5cm;
+    size: auto;
+  }
+
+  body,
+  .vmd-app,
+  .vmd-document-bg {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+    height: auto !important;
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Hide interactive controls, sidebars, drawers, floating toolbars */
+  aside,
+  header,
+  .vmd-annotation-toolbar,
+  .vmd-note-tooltip,
+  .vmd-table-header button,
+  .vmd-table-footer,
+  .vmd-copy-code-btn,
+  .vmd-table-scroll-hint,
+  button,
+  .group:hover .opacity-0,
+  [data-delete-id],
+  .fixed,
+  .vmd-cell-badge {
+    display: none !important;
+  }
+
+  /* Ensure document scroll container expands for full page print */
+  .overflow-y-auto,
+  .overflow-x-hidden,
+  .overflow-hidden {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+
+  /* Page break rules for clean document structure */
+  h1, h2, h3 {
+    page-break-after: avoid;
+    break-after: avoid;
+    color: #0f172a !important;
+  }
+
+  pre,
+  table,
+  .vmd-table-wrapper,
+  .vmd-callout-box,
+  .vmd-stepper,
+  .vmd-component-note {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    background: #f8fafc !important;
+    color: #0f172a !important;
+  }
+
+  mark.vmd-highlight {
+    background-color: #fef08a !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* Responsive Image & Resource Handling */
+.vmd-image-container {
+  display: block;
+  max-width: 100%;
+  margin: 1.25rem 0;
+}
+
+.vmd-rendered-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  background-color: var(--bg-card);
+}
+
+.vmd-image-failed img {
+  display: none !important;
+}
+
+.vmd-image-failed .vmd-image-fallback-badge {
+  display: inline-flex !important;
+}
+
+/* ==========================================================================
+   VisualMD Inline & Block Math Formatting (LaTeX / Subscripts)
+   ========================================================================== */
+.vmd-math {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 0.05rem 0.35rem;
+  margin: 0 0.15rem;
+  border-radius: 0.375rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-surface);
+  border: 1px solid var(--border-color);
+  line-height: 1.25;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.vmd-math i {
+  font-style: italic;
+  font-family: 'KaTeX_Math', 'Cambria Math', 'Times New Roman', serif;
+  margin-right: 0.05rem;
+}
+
+.vmd-math sub {
+  font-size: 0.72em;
+  line-height: 0;
+  vertical-align: -0.25em;
+  margin-left: 0.02rem;
+  font-weight: 700;
+}
+
+.vmd-math sup {
+  font-size: 0.72em;
+  line-height: 0;
+  vertical-align: 0.45em;
+  margin-left: 0.02rem;
+  font-weight: 700;
+}
+
+.vmd-math-block {
+  display: block;
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  text-align: center;
+  font-family: 'KaTeX_Math', 'Cambria Math', 'Times New Roman', serif;
+  font-size: 1.1em;
+  color: var(--text-primary);
+  overflow-x: auto;
+}
+
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+

@@ -1,0 +1,30 @@
+{
+  "name": "@visualmd/server",
+  "version": "1.0.24",
+  "type": "module",
+  "description": "VisualMD local-first persistence server and CLI daemon",
+  "main": "dist/server.js",
+  "types": "dist/server.d.ts",
+  "bin": {
+    "visualmd": "bin/visualmd.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@visualmd/compiler": "*",
+    "express": "^4.21.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.1",
+    "typescript": "^5.8.2"
+  },
+  "author": "Darshan Aguru <https://thisdarshiii.in>",
+  "homepage": "https://thisdarshiii.in",
+  "license": "MIT"
+}

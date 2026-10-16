@@ -1,0 +1,335 @@
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  Sparkles,
+  Layers,
+  Code2,
+  GitBranch,
+  Presentation,
+  CheckCircle2,
+  ChevronRight,
+  ChevronLeft,
+  X,
+  BookOpen,
+  ArrowRight,
+  Zap,
+  HelpCircle,
+} from 'lucide-react';
+import { VisualMDLogo } from '../brand/VisualMDLogo';
+
+interface TutorialModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+interface TutorialSlide {
+  badge: string;
+  badgeColor: string;
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  features: Array<{
+    title: string;
+    desc: string;
+    tag?: string;
+  }>;
+  codePreview?: string;
+}
+
+const TUTORIAL_SLIDES: TutorialSlide[] = [
+  {
+    badge: 'Welcome to VisualMD',
+    badgeColor: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+    icon: <VisualMDLogo size={28} />,
+    title: 'Next-Generation Visual Markdown',
+    subtitle: 'VisualMD transforms standard text notes, architectural specs, and documentation into interactive, reactive visual intelligence.',
+    features: [
+      {
+        title: 'Auto-Healing Compiler',
+        desc: 'Fault-tolerant AST parser that automatically repairs unclosed tags and syntax errors with zero crashes.',
+        tag: 'Resilient',
+      },
+      {
+        title: 'Adaptive Screen Scaling',
+        desc: 'Dynamically optimizes readability from compact 12-inch laptops to expansive 4K presentation projectors.',
+        tag: 'Universal',
+      },
+      {
+        title: '12 Designer Themes',
+        desc: 'Instantly toggle between Obsidian dark, Tokyo Night, Dracula, Nord, Sepia, and clean Paper palettes.',
+        tag: 'Themes',
+      },
+    ],
+  },
+  {
+    badge: 'Interactive Widgets',
+    badgeColor: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+    icon: <Layers className="w-6 h-6 text-purple-500" />,
+    title: 'Supercharge Content with Macros',
+    subtitle: 'Embed rich interactive blocks using simple, intuitive syntax markers right inside your Markdown files.',
+    features: [
+      {
+        title: '$STEPPER$ Workflows',
+        desc: 'Create guided multi-step walkthroughs with step numbers and reactive step navigation.',
+        tag: '$STEPPER$',
+      },
+      {
+        title: '$TABS$ Code & Architecture',
+        desc: 'Organize related configurations, benchmarks, or multi-language code snippets into switchable tabs.',
+        tag: '$TABS$',
+      },
+      {
+        title: '$METRICS$ Dashboard Grids',
+        desc: 'Display high-impact KPI summary cards with metric labels, values, and status badges.',
+        tag: '$METRICS$',
+      },
+      {
+        title: '$QUIZ$ Knowledge Checks',
+        desc: 'Self-grading checklists and multiple-choice quizzes with instant interactive feedback.',
+        tag: '$QUIZ$',
+      },
+    ],
+    codePreview: `$STEPPER$S
+@1 Initialize Cluster
+Configure seed nodes and heartbeat timeout (150ms-300ms).
+@2 Elect Leader
+Nodes transition through Follower -> Candidate -> Leader.
+$STEPPER$E`,
+  },
+  {
+    badge: 'LaTeX Math & Code Immersion',
+    badgeColor: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+    icon: <Code2 className="w-6 h-6 text-emerald-500" />,
+    title: 'First-Class Formulas & Syntax',
+    subtitle: 'Beautiful mathematical equations, technical notation, and protected code fences designed for technical documentation.',
+    features: [
+      {
+        title: 'Inline & Display Math',
+        desc: 'Write math notation like $S_1$, $\\mathcal{O}(N \\log N)$, or full multi-line $$\\dots$$ display blocks via KaTeX.',
+        tag: 'KaTeX',
+      },
+      {
+        title: 'Code Fence Immunity',
+        desc: 'Fenced code blocks (```) preserve exact raw syntax without triggering compiler macro replacements.',
+        tag: 'Protected',
+      },
+      {
+        title: '1-Click Code Copy',
+        desc: 'Instant clipboard copying on all code blocks with language badges and clean formatting.',
+        tag: 'Copyable',
+      },
+    ],
+    codePreview: `Follower $S_1$ misses heartbeats for 220ms.
+It increments term $t = 2$ and broadcasts RequestVote:
+
+$$ \\sum_{i=1}^{n} P(S_i) = 1 $$`,
+  },
+  {
+    badge: 'Version Control (VCS)',
+    badgeColor: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+    icon: <GitBranch className="w-6 h-6 text-amber-500" />,
+    title: 'Built-in Checkpoints & Previews',
+    subtitle: 'Never lose your edits or drafts. Compare visual diffs, preview revisions rendered in real time, and safely roll back anytime.',
+    features: [
+      {
+        title: 'Named Checkpoints',
+        desc: 'Capture milestones before refactors or LLM prompts with a single click.',
+        tag: 'Snapshots',
+      },
+      {
+        title: 'Rendered Live Preview',
+        desc: 'Click "Open in Preview" to inspect any historical revision fully rendered side-by-side with your viewer.',
+        tag: 'Side-by-Side',
+      },
+      {
+        title: 'Upload LLM Revisions',
+        desc: 'Paste or drop new drafts generated by ChatGPT, Claude, or Cursor and test them before setting as latest.',
+        tag: 'LLM Workflow',
+      },
+    ],
+  },
+  {
+    badge: 'Slide Decks & Annotations',
+    badgeColor: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
+    icon: <Presentation className="w-6 h-6 text-indigo-500" />,
+    title: 'Presentations & Active Study',
+    subtitle: 'Turn any technical specification or reading note into an executive presentation deck or annotated study guide.',
+    features: [
+      {
+        title: 'Slide Deck Mode (P)',
+        desc: 'Transforms your document into a 16:9 presentation with drawing pen, laser pointer, and blackout toggles.',
+        tag: 'Press P',
+      },
+      {
+        title: 'Highlights & Sticky Notes',
+        desc: 'Select any text or table cell to attach colored highlights and personal notes.',
+        tag: 'Highlight',
+      },
+      {
+        title: 'Bookmarks & Outline (⌘J)',
+        desc: 'Double-click section headers to drop bookmarks and navigate via the index drawer.',
+        tag: 'Press ⌘J',
+      },
+      {
+        title: 'Global Instant Search (⌘K)',
+        desc: 'FTS5 full-text search across all documents and headings in milliseconds.',
+        tag: 'Press ⌘K',
+      },
+    ],
+  },
+];
+
+export const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+
+  if (!isOpen) return null;
+
+  const currentSlide = TUTORIAL_SLIDES[currentSlideIndex];
+  const isFirstSlide = currentSlideIndex === 0;
+  const isLastSlide = currentSlideIndex === TUTORIAL_SLIDES.length - 1;
+
+  const handleNext = () => {
+    if (isLastSlide) {
+      onClose();
+    } else {
+      setCurrentSlideIndex((prev) => prev + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (!isFirstSlide) {
+      setCurrentSlideIndex((prev) => prev - 1);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+      <div className="w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
+        {/* Top Header */}
+        <div className="px-6 py-4 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${currentSlide.badgeColor}`}>
+              {currentSlide.badge}
+            </span>
+            <span className="text-xs text-[var(--text-muted)] font-mono">
+              Step {currentSlideIndex + 1} of {TUTORIAL_SLIDES.length}
+            </span>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+            title="Close Tutorial"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Slide Content Body */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Headline */}
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] shrink-0 shadow-xs">
+              {currentSlide.icon}
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">
+                {currentSlide.title}
+              </h2>
+              <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
+                {currentSlide.subtitle}
+              </p>
+            </div>
+          </div>
+
+          {/* Features Grid */}
+          <div className="grid grid-cols-1 gap-2.5 pt-2">
+            {currentSlide.features.map((feat, idx) => (
+              <div
+                key={idx}
+                className="flex items-start gap-3 p-3 rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/50 hover:bg-[var(--bg-secondary)] transition-colors"
+              >
+                <div className="p-1 rounded-md bg-blue-500/10 text-blue-500 mt-0.5 shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-[var(--text-primary)]">
+                      {feat.title}
+                    </span>
+                    {feat.tag && (
+                      <span className="px-1.5 py-0.2 rounded font-mono text-[9px] bg-[var(--bg-tertiary)] text-[var(--text-muted)] border border-[var(--border-color)]">
+                        {feat.tag}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5 leading-relaxed">
+                    {feat.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Optional Code Preview Snippet */}
+          {currentSlide.codePreview && (
+            <div className="pt-2">
+              <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <Code2 className="w-3 h-3 text-purple-400" />
+                <span>Example Markdown Syntax</span>
+              </div>
+              <pre className="p-3 rounded-xl bg-slate-900 text-slate-200 text-xs font-mono overflow-x-auto border border-slate-800 leading-relaxed shadow-inner">
+                {currentSlide.codePreview}
+              </pre>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Navigation Bar */}
+        <div className="px-6 py-3.5 border-t border-[var(--border-color)] bg-[var(--bg-secondary)] flex items-center justify-between">
+          {/* Step Indicator Dots */}
+          <div className="flex items-center gap-1.5">
+            {TUTORIAL_SLIDES.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentSlideIndex(idx)}
+                className={`h-2 rounded-full transition-all cursor-pointer ${
+                  idx === currentSlideIndex
+                    ? 'w-6 bg-blue-500'
+                    : 'w-2 bg-[var(--border-color)] hover:bg-[var(--text-muted)]'
+                }`}
+                title={`Go to step ${idx + 1}`}
+              />
+            ))}
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            {!isFirstSlide && (
+              <button
+                onClick={handlePrev}
+                className="px-3 py-1.5 rounded-lg border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Back</span>
+              </button>
+            )}
+
+            <button
+              onClick={handleNext}
+              className="px-4 py-1.5 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] hover:opacity-90 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-opacity cursor-pointer"
+            >
+              <span>{isLastSlide ? 'Get Started' : 'Continue'}</span>
+              {isLastSlide ? (
+                <Sparkles className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronRight className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
