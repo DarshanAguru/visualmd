@@ -386,8 +386,17 @@ export const App: React.FC = () => {
       }
 
       // Cmd/Ctrl + I: Toggle Settings modal (also supports Cmd/Ctrl + ,)
-      if ((e.metaKey || e.ctrlKey) && (e.key.toLowerCase() === 'i' || e.key === ',')) {
+      const isModifier = e.metaKey || e.ctrlKey;
+      const isKeyI =
+        e.code === 'KeyI' ||
+        (typeof e.key === 'string' && e.key.toLowerCase() === 'i') ||
+        e.keyCode === 73 ||
+        e.which === 73;
+      const isComma = e.key === ',' || e.code === 'Comma' || e.keyCode === 188;
+
+      if (isModifier && (isKeyI || isComma)) {
         e.preventDefault();
+        e.stopPropagation();
         setIsSettingsOpen((prev) => !prev);
         return;
       }
@@ -463,8 +472,8 @@ export const App: React.FC = () => {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [currentDoc]);
 
   // Document & Folder Handlers

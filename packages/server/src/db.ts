@@ -305,24 +305,60 @@ export class VisualMDDatabase {
 
   public getDocumentByFilePath(filePath: string): DocumentRecord | null {
     if (!filePath) return null;
-    const resolved = path.resolve(filePath);
     const stmt = this.db.prepare('SELECT * FROM documents WHERE file_path = ?');
-    let doc = stmt.get(resolved) as unknown as DocumentRecord | undefined;
+
+    // 1. Direct raw check
+    let doc = stmt.get(filePath) as unknown as DocumentRecord | undefined;
     if (doc) return doc;
 
-    // Cross-OS fallback: check alternative slash representation
-    const altSlash = resolved.includes('/') ? resolved.replace(/\//g, '\\') : resolved.replace(/\\/g, '/');
-    doc = stmt.get(altSlash) as unknown as DocumentRecord | undefined;
+    // 2. Direct path.resolve check
+    const resolved = path.resolve(filePath);
+    doc = stmt.get(resolved) as unknown as DocumentRecord | undefined;
     if (doc) return doc;
 
-    // Cross-OS case-insensitive drive letter or file system check (Windows & macOS)
-    if (process.platform === 'win32' || process.platform === 'darwin') {
-      const allStmt = this.db.prepare('SELECT * FROM documents WHERE file_path IS NOT NULL');
-      const all = allStmt.all() as unknown as DocumentRecord[];
-      const lower = resolved.toLowerCase().replace(/\\/g, '/');
-      const match = all.find((d) => d.file_path && path.resolve(d.file_path).toLowerCase().replace(/\\/g, '/') === lower);
-      if (match) return match;
-    }
+    // 3. Normalized forward-slash check
+    const normForward = filePath.replace(/\\/g, '/');
+    doc = stmt.get(normForward) as unknown as DocumentRecord | undefined;
+    if (doc) return doc;
+
+    // 4. Normalized backward-slash check
+    const normBack = filePath.replace(/\//g, '\\');
+    doc = stmt.get(normBack) as unknown as DocumentRecord | undefined;
+    if (doc) return doc;
+
+    // 5. Resolved with forward slashes
+    const resolvedForward = path.resolve(normForward);
+    doc = stmt.get(resolvedForward) as unknown as DocumentRecord | undefined;
+    if (doc) return doc;
+
+    const resolvedBack = path.resolve(normForward).replace(/\//g, '\\');
+    doc = stmt.get(resolvedBack) as unknown as DocumentRecord | undefined;
+    if (doc) return doc;
+
+    // 6. Cross-OS matching: check all records normalizing slashes and case
+    const allStmt = this.db.prepare('SELECT * FROM documents WHERE file_path IS NOT NULL');
+    const all = allStmt.all() as unknown as DocumentRecord[];
+    const isCaseInsensitive = process.platform === 'win32' || process.platform === 'darwin';
+    const targetNormForward = normForward.toLowerCase();
+    const resolvedForwardNorm = resolvedForward.replace(/\\/g, '/');
+
+    const match = all.find((d) => {
+      if (!d.file_path) return false;
+      const dNorm = d.file_path.replace(/\\/g, '/');
+      if (dNorm === normForward || (isCaseInsensitive && dNorm.toLowerCase() === targetNormForward)) {
+        return true;
+      }
+      const dResolvedNorm = path.resolve(dNorm).replace(/\\/g, '/');
+      if (
+        dResolvedNorm === resolvedForwardNorm ||
+        (isCaseInsensitive && dResolvedNorm.toLowerCase() === resolvedForwardNorm.toLowerCase())
+      ) {
+        return true;
+      }
+      return false;
+    });
+
+    if (match) return match;
     return null;
   }
 
