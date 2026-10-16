@@ -104,7 +104,7 @@ export function createServer(
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
       status: 'ok',
-      version: '1.0.24',
+      version: '1.0.242',
       dbPath: db.dbPath,
       dataDir: dataDir ? path.resolve(dataDir) : null,
     });

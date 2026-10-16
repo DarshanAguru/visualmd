@@ -371,7 +371,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="hidden md:block pt-3 border-t border-[var(--border-color)] px-3 text-[10px] text-[var(--text-muted)] font-mono">
-            VisualMD v1.0.24 • Release
+            VisualMD v1.0.242 • Release
           </div>
         </div>
 
@@ -875,7 +875,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <VisualMDLogo size={38} />
                     <div>
                       <h4 className="text-sm font-bold">VisualMD Specification Engine</h4>
-                      <p className="text-xs text-[var(--text-muted)]">Version 1.0.24 • Production Ready</p>
+                      <p className="text-xs text-[var(--text-muted)]">Version 1.0.242 • Production Ready</p>
                     </div>
                   </div>
                   <p className="text-xs text-[var(--text-secondary)] leading-relaxed">

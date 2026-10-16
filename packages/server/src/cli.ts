@@ -323,7 +323,7 @@ export async function runCLI() {
       }
       process.exit(0);
     } else if (arg === '--version' || arg === '-v' || arg === 'version') {
-      console.log('visualmd v1.0.24');
+      console.log('visualmd v1.0.242');
       process.exit(0);
     } else if (arg === '--port' || arg === '-p') {
       port = parseInt(args[++i], 10) || 5665;

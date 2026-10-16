@@ -197,14 +197,13 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
 
           if (oldDuration !== newDuration) {
             setTimeLeft((curTimeLeft) => {
-              if (!isRunning) {
-                // When paused or stopped, immediately update to the new full duration
+              // If unstarted at full duration, update to new full duration
+              if (curTimeLeft === oldDuration) {
                 return newDuration;
-              } else {
-                // When running, adjust remaining time preserving elapsed progress
-                const elapsed = Math.max(0, oldDuration - curTimeLeft);
-                return Math.max(1, newDuration - elapsed);
               }
+              // If in-progress (running or paused with elapsed time), adjust preserving elapsed time
+              const elapsed = Math.max(0, oldDuration - curTimeLeft);
+              return Math.max(1, newDuration - elapsed);
             });
           }
 
@@ -222,13 +221,6 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
     };
   }, [mode, isRunning]);
 
-  // Sync duration on mode or settings change when not running
-  useEffect(() => {
-    if (!isRunning) {
-      setTimeLeft(getDurationForMode(mode));
-    }
-  }, [mode, settings, getDurationForMode, isRunning]);
-
   // Hydrate pomodoro settings and completed sessions from DB on initial mount
   useEffect(() => {
     fetch('/api/settings/pomodoro_settings')
@@ -237,7 +229,13 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
         if (data?.value) {
           try {
             const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-            setSettings((prev) => ({ ...prev, ...parsed }));
+            setSettings((prev) => {
+              const updated = { ...prev, ...parsed };
+              const oldFocus = (prev.focusDuration || 25) * 60;
+              const newFocus = (updated.focusDuration || 25) * 60;
+              setTimeLeft((cur) => (cur === oldFocus ? newFocus : cur));
+              return updated;
+            });
             localStorage.setItem('visualmd-pomodoro-settings', JSON.stringify(parsed));
           } catch {}
         }
@@ -275,9 +273,9 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
   // Completion Toast Notification State
   const [toast, setToast] = useState<PomodoroToastData | null>(null);
 
-  // Monitor idle activity during short/long break (activate screensaver after 6s of inactivity)
+  // Monitor idle activity during short/long break when running (activate screensaver after 6s of inactivity)
   useEffect(() => {
-    const isBreak = mode === 'short_break' || mode === 'long_break';
+    const isBreak = (mode === 'short_break' || mode === 'long_break') && isRunning;
     if (!isBreak) {
       setIsScreensaverActive(false);
       if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
@@ -307,7 +305,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
       window.removeEventListener('keydown', handleUserActivity);
       window.removeEventListener('touchstart', handleUserActivity);
     };
-  }, [mode]);
+  }, [mode, isRunning]);
 
   // Outside click handler for popover
   useEffect(() => {
@@ -587,7 +585,11 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
                 ) : (
                   <>
                     <Play className="w-4 h-4 fill-white ml-0.5" />
-                    <span>Start {modeBadge.label}</span>
+                    <span>
+                      {timeLeft < totalModeDuration && timeLeft > 0
+                        ? 'Resume'
+                        : `Start ${modeBadge.label}`}
+                    </span>
                   </>
                 )}
               </button>
