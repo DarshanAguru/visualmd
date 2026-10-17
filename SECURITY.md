@@ -4,8 +4,8 @@
 
 | Version | Supported          |
 | :---    | :---               |
-| 1.0.x (>= 1.0.242) | YES |
-| < 1.0.242 | YES (WARN: Update to v1.0.242 recommended ) |
+| 1.0.x (>= 1.0.242) | :white_check_mark: |
+| < 1.0.242 |  :warning: Update to v1.0.242 recommended |
 
 ---
 
