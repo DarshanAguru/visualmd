@@ -1,11 +1,15 @@
 # Security Policy & Architecture
 
-## 1. Supported Versions
+## 1. Supported Versions & Release History
 
-| Version | Supported          |
-| :---    | :---               |
-| 1.0.x (>= 1.0.242) | :white_check_mark: |
-| < 1.0.242 |  :warning: Update to v1.0.242 recommended |
+| Version | Status | Security Support | Release Notes / Highlights |
+| :--- | :--- | :--- | :--- |
+| **v1.0.244** | **Latest (Current)** | :white_check_mark: Actively Supported | Streamlined 2-doc tutorial, LeetCode streak calendar with custom threshold, frosted break screensaver, F11 fullscreen |
+| **v1.0.242** | Previous Release | :white_check_mark: Maintained | VCS rollback checkpoints, companion assets serving, FTS5 prefix search |
+| **v1.0.24** | Historical Release | :warning: Upgrade Recommended | Pomodoro interval settings, study tracking, code fence macro immunity |
+| **v1.0.22** | Historical Release | :warning: Upgrade Recommended | Executive 16:9 presentation slide deck, theme contrast polish |
+| **v1.0.2** | Historical Release | :warning: Upgrade Recommended | Case-insensitive tags, checklist quiz options, unescaped percent URI healing |
+| **v1.0.0** | Initial Launch | :warning: Upgrade Recommended | Initial release of VisualMD token-efficient interactive markdown workspace |
 
 ---
 

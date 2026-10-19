@@ -18,9 +18,11 @@ import {
   Edit2,
   HelpCircle,
   Settings,
+  Bot,
 } from 'lucide-react';
 import { VisualMDLogo } from '../brand/VisualMDLogo';
 import { SettingsTab } from '../modals/SettingsModal';
+import { APP_VERSION } from '../../version';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -278,7 +280,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               VisualMD
             </span>
             <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-[var(--bg-tertiary)] text-[var(--text-muted)] border border-[var(--border-color)]">
-              v1.0
+              v{APP_VERSION}
             </span>
           </div>
         </div>

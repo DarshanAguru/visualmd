@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ThemeType } from '../../types';
 import { VisualMDLogo } from '../brand/VisualMDLogo';
+import { APP_VERSION } from '../../version';
 import {
   Settings,
   X,
@@ -31,80 +32,84 @@ import {
   Loader2,
 } from 'lucide-react';
 
-export type SettingsTab = 'appearance' | 'reading' | 'pomodoro' | 'prompts' | 'help' | 'shortcuts' | 'about';
+export type SettingsTab = 'appearance' | 'reading' | 'pomodoro' | 'help' | 'shortcuts' | 'about';
 
 interface ThemeOption {
   id: ThemeType;
   name: string;
   category: 'Dark & Modern' | 'Light & Paper';
   bgHex: string;
+  cardHex: string;
+  textHex: string;
+  mutedHex: string;
   accentHex: string;
+  accentSurfaceHex: string;
+  fontFamily?: string;
   description: string;
 }
 
 export const THEME_OPTIONS: ThemeOption[] = [
+  // 4 Curated High-Contrast Dark Modes
   {
     id: 'dark',
     name: 'Obsidian Dark',
     category: 'Dark & Modern',
     bgHex: '#09090b',
+    cardHex: '#121215',
+    textHex: '#f8fafc',
+    mutedHex: '#94a3b8',
     accentHex: '#3b82f6',
-    description: 'Matte obsidian with crisp slate typography & electric blue',
+    accentSurfaceHex: 'rgba(59, 130, 246, 0.15)',
+    description: 'Matte obsidian with ultra-crisp slate typography & electric blue',
   },
   {
     id: 'midnight',
     name: 'Midnight Navy',
     category: 'Dark & Modern',
     bgHex: '#0b0f19',
+    cardHex: '#111827',
+    textHex: '#f9fafb',
+    mutedHex: '#9ca3af',
     accentHex: '#6366f1',
-    description: 'Deep space cosmic navy with soft luminous indigo',
+    accentSurfaceHex: 'rgba(99, 102, 241, 0.15)',
+    description: 'Deep cosmic space navy with soft luminous indigo accents',
   },
   {
     id: 'tokyo',
     name: 'Tokyo Night',
     category: 'Dark & Modern',
     bgHex: '#1a1b26',
+    cardHex: '#24283b',
+    textHex: '#c0caf5',
+    mutedHex: '#9aa5ce',
     accentHex: '#7aa2f7',
-    description: 'Cyber neon indigo with vivid cyan & lavender accents',
-  },
-  {
-    id: 'dracula',
-    name: 'Dracula Velvet',
-    category: 'Dark & Modern',
-    bgHex: '#282a36',
-    accentHex: '#bd93f9',
-    description: 'Vampire dark purple with pastel orchid & pink highlights',
-  },
-  {
-    id: 'forest',
-    name: 'Forest Dark',
-    category: 'Dark & Modern',
-    bgHex: '#0c1512',
-    accentHex: '#10b981',
-    description: 'Deep pine emerald with luminous jade accents',
-  },
-  {
-    id: 'nord',
-    name: 'Nord Arctic',
-    category: 'Dark & Modern',
-    bgHex: '#242933',
-    accentHex: '#88c0d0',
-    description: 'Polar slate & arctic frost ice blue typography',
+    accentSurfaceHex: 'rgba(122, 162, 247, 0.15)',
+    description: 'Cyber neon night with vivid cyan & lavender highlights',
   },
   {
     id: 'retro',
     name: 'CRT Terminal',
     category: 'Dark & Modern',
     bgHex: '#0c0d0e',
+    cardHex: '#141618',
+    textHex: '#fbbf24',
+    mutedHex: '#d97706',
     accentHex: '#f59e0b',
-    description: 'Phosphor amber monospace CRT on matte charcoal',
+    accentSurfaceHex: 'rgba(245, 158, 11, 0.15)',
+    fontFamily: 'monospace',
+    description: 'Phosphor amber monospace on matte charcoal terminal',
   },
+  // 3 Curated High-Contrast Light & Paper Modes
   {
     id: 'light',
-    name: 'Editorial Light',
+    name: 'Modern Clean Paper',
     category: 'Light & Paper',
     bgHex: '#ffffff',
-    accentHex: '#18181b',
+    cardHex: '#f8fafc',
+    textHex: '#0f172a',
+    mutedHex: '#64748b',
+    accentHex: '#2563eb',
+    accentSurfaceHex: 'rgba(37, 99, 235, 0.08)',
     description: 'Crisp editorial white with dark charcoal typography',
   },
   {
@@ -112,24 +117,25 @@ export const THEME_OPTIONS: ThemeOption[] = [
     name: 'Warm Notebook',
     category: 'Light & Paper',
     bgHex: '#fbf7ee',
+    cardHex: '#fdfbf7',
+    textHex: '#27201b',
+    mutedHex: '#786c5f',
     accentHex: '#b45309',
-    description: 'Ruled rich cream paper with deep fountain pen ink',
+    accentSurfaceHex: 'rgba(180, 83, 9, 0.1)',
+    description: 'Ruled rich cream paper with fountain pen ink & margins',
   },
   {
     id: 'sepia',
     name: 'Literary Sepia',
     category: 'Light & Paper',
     bgHex: '#f4ecd8',
+    cardHex: '#f9f4e6',
+    textHex: '#342516',
+    mutedHex: '#634d35',
     accentHex: '#9a3412',
-    description: 'Antique library parchment with warm espresso serif',
-  },
-  {
-    id: 'paper',
-    name: 'Minimal Paper',
-    category: 'Light & Paper',
-    bgHex: '#f8f9fa',
-    accentHex: '#2563eb',
-    description: 'Soft eggshell paper with clean modern typography',
+    accentSurfaceHex: 'rgba(154, 52, 18, 0.1)',
+    fontFamily: 'Georgia, serif',
+    description: 'Aesthetic book parchment with espresso typography & rust accent',
   },
 ];
 
@@ -253,8 +259,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      if (initialTab) {
+      const validTabs: SettingsTab[] = ['appearance', 'reading', 'pomodoro', 'help', 'shortcuts', 'about'];
+      if (initialTab && validTabs.includes(initialTab)) {
         setActiveTab(initialTab);
+      } else {
+        setActiveTab('appearance');
       }
       // Re-hydrate from localStorage first for 0ms responsiveness
       try {
@@ -288,34 +297,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return () => window.removeEventListener('visualmd:pomodoro-settings', handleSync);
   }, []);
 
-  // AI Prompts State
-  const [promptSubTab, setPromptSubTab] = useState<'system-prompt' | 'skill' | 'standard'>('system-prompt');
-  const [promptContent, setPromptContent] = useState<string>('');
-  const [promptLoading, setPromptLoading] = useState<boolean>(false);
-  const [promptCopied, setPromptCopied] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (!isOpen || activeTab !== 'prompts') return;
-    setPromptLoading(true);
-    setPromptCopied(false);
-
-    fetch(`/api/prompts/${promptSubTab}`)
-      .then((res) => (res.ok ? res.text() : 'Failed to load prompt.'))
-      .then((text) => setPromptContent(text))
-      .catch(() => setPromptContent('Error fetching prompt content.'))
-      .finally(() => setPromptLoading(false));
-  }, [promptSubTab, activeTab, isOpen]);
-
-  const handleCopyPrompt = () => {
-    navigator.clipboard.writeText(promptContent);
-    setPromptCopied(true);
-    setTimeout(() => setPromptCopied(false), 2000);
-  };
-
-  const handleDownloadPrompt = () => {
-    window.open(`/api/prompts/${promptSubTab}?download=true`, '_blank');
-  };
-
   if (!isOpen) return null;
 
   const currentScalePreset = FONT_SCALE_PRESETS[fontScaleIndex] || FONT_SCALE_PRESETS[3];
@@ -346,7 +327,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               { id: 'appearance', label: 'Themes & Colors', icon: Palette },
               { id: 'reading', label: 'Canvas & Sizing', icon: Columns },
               { id: 'pomodoro', label: 'Study & Pomodoro', icon: Timer },
-              { id: 'prompts', label: 'AI Prompts & Skills', icon: Bot },
               { id: 'help', label: 'Help & Guide', icon: HelpCircle },
               { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
               { id: 'about', label: 'About VisualMD', icon: Info },
@@ -371,7 +351,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="hidden md:block pt-3 border-t border-[var(--border-color)] px-3 text-[10px] text-[var(--text-muted)] font-mono">
-            VisualMD v1.0.242 • Release
+            VisualMD v{APP_VERSION} • Release
           </div>
         </div>
 
@@ -384,7 +364,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {activeTab === 'appearance' && 'Themes & Color Palettes'}
                 {activeTab === 'reading' && 'Canvas Width & Typography Scaling'}
                 {activeTab === 'pomodoro' && 'Study Timer & Focus Intervals'}
-                {activeTab === 'prompts' && 'AI Agent Prompts & Skills'}
                 {activeTab === 'help' && 'Feature Guide & Interactive Tour'}
                 {activeTab === 'shortcuts' && 'Keyboard Shortcuts Reference'}
                 {activeTab === 'about' && 'About VisualMD Workspace'}
@@ -393,7 +372,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {activeTab === 'appearance' && 'Choose high-contrast dark or gentle paper themes for long study sessions.'}
                 {activeTab === 'reading' && 'Optimize reading canvas boundaries from 12" laptops to 4K projectors.'}
                 {activeTab === 'pomodoro' && 'Configure custom focus and break durations for structured learning.'}
-                {activeTab === 'prompts' && 'Ready-to-use prompt templates and agent skills for ChatGPT, Claude, and Gemini.'}
                 {activeTab === 'help' && 'Explore interactive widgets, math rendering, and quick macro syntax.'}
                 {activeTab === 'shortcuts' && 'Master productivity hotkeys for navigation, zoom, and presentations.'}
                 {activeTab === 'about' && 'Local-first, reactive markdown engineering notebook for modern thinkers.'}
@@ -417,39 +395,94 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div>
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
                     <Moon className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Dark & Cyber Modes</span>
-                    <span className="text-[10px] font-normal lowercase opacity-70">(7 themes)</span>
+                    <span>Dark & Modern Modes</span>
+                    <span className="text-[10px] font-normal lowercase opacity-70">(4 curated themes)</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {THEME_OPTIONS.filter((t) => t.category === 'Dark & Modern').map((opt) => {
                       const isSelected = opt.id === theme;
                       return (
                         <button
                           key={opt.id}
                           onClick={() => onThemeChange(opt.id)}
-                          className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          className={`group relative rounded-xl border p-3.5 text-left transition-all cursor-pointer flex flex-col gap-2.5 shadow-xs ${
                             isSelected
-                              ? 'bg-[var(--accent-surface)] border-[var(--accent)] ring-1 ring-[var(--accent)]'
-                              : 'bg-[var(--bg-secondary)]/50 border-[var(--border-color)] hover:border-slate-400 dark:hover:border-slate-600'
+                              ? 'ring-2 ring-[var(--accent)] border-[var(--accent)] shadow-md'
+                              : 'border-[var(--border-color)] hover:border-slate-400 dark:hover:border-slate-500'
                           }`}
+                          style={{
+                            backgroundColor: opt.bgHex,
+                            fontFamily: opt.fontFamily || 'inherit',
+                          }}
                         >
+                          {/* Card Header */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="w-3.5 h-3.5 rounded-full border border-white/20 shadow-2xs"
+                                style={{ backgroundColor: opt.accentHex }}
+                              />
+                              <span
+                                className="text-xs font-bold leading-tight tracking-tight"
+                                style={{ color: opt.textHex }}
+                              >
+                                {opt.name}
+                              </span>
+                            </div>
+                            {isSelected && (
+                              <span
+                                className="text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs"
+                                style={{
+                                  backgroundColor: opt.accentSurfaceHex,
+                                  color: opt.accentHex,
+                                  borderColor: opt.accentHex,
+                                }}
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Active</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Live Document Preview Box */}
                           <div
-                            className="w-5 h-5 rounded-full shrink-0 border border-slate-700 flex items-center justify-center shadow-xs mt-0.5"
-                            style={{ backgroundColor: opt.bgHex }}
+                            className="rounded-lg p-2.5 border text-left flex flex-col gap-1.5 transition-transform group-hover:scale-[1.01]"
+                            style={{
+                              backgroundColor: opt.cardHex,
+                              borderColor: isSelected ? opt.accentHex : 'rgba(128,128,128,0.2)',
+                            }}
                           >
                             <div
-                              className="w-2 h-2 rounded-full"
-                              style={{ backgroundColor: opt.accentHex }}
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold leading-tight truncate">{opt.name}</span>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0 ml-1" />}
+                              className="text-xs font-bold leading-snug flex items-center justify-between"
+                              style={{ color: opt.textHex }}
+                            >
+                              <span>Aa Quick Heading</span>
+                              <span
+                                className="text-[9px] font-mono px-1 py-0.2 rounded"
+                                style={{
+                                  backgroundColor: opt.accentSurfaceHex,
+                                  color: opt.accentHex,
+                                }}
+                              >
+                                $STEPPER$
+                              </span>
                             </div>
-                            <p className="text-[10px] text-[var(--text-muted)] leading-tight mt-1">
+                            <p
+                              className="text-[10.5px] leading-relaxed line-clamp-2"
+                              style={{ color: opt.mutedHex }}
+                            >
                               {opt.description}
                             </p>
+                            <div
+                              className="text-[9.5px] font-mono px-1.5 py-0.5 rounded border inline-block w-fit mt-0.5"
+                              style={{
+                                backgroundColor: opt.bgHex,
+                                color: opt.textHex,
+                                borderColor: 'rgba(128,128,128,0.25)',
+                              }}
+                            >
+                              const speed = <span style={{ color: opt.accentHex }}>1000</span>;
+                            </div>
                           </div>
                         </button>
                       );
@@ -462,38 +495,93 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
                     <Sun className="w-3.5 h-3.5 text-amber-500" />
                     <span>Light, Notebook & Sepia Modes</span>
-                    <span className="text-[10px] font-normal lowercase opacity-70">(4 themes)</span>
+                    <span className="text-[10px] font-normal lowercase opacity-70">(3 curated themes)</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {THEME_OPTIONS.filter((t) => t.category === 'Light & Paper').map((opt) => {
                       const isSelected = opt.id === theme;
                       return (
                         <button
                           key={opt.id}
                           onClick={() => onThemeChange(opt.id)}
-                          className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          className={`group relative rounded-xl border p-3.5 text-left transition-all cursor-pointer flex flex-col gap-2.5 shadow-xs ${
                             isSelected
-                              ? 'bg-[var(--accent-surface)] border-[var(--accent)] ring-1 ring-[var(--accent)]'
-                              : 'bg-[var(--bg-secondary)]/50 border-[var(--border-color)] hover:border-slate-400 dark:hover:border-slate-600'
+                              ? 'ring-2 ring-[var(--accent)] border-[var(--accent)] shadow-md'
+                              : 'border-[var(--border-color)] hover:border-slate-400 dark:hover:border-slate-500'
                           }`}
+                          style={{
+                            backgroundColor: opt.bgHex,
+                            fontFamily: opt.fontFamily || 'inherit',
+                          }}
                         >
+                          {/* Card Header */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="w-3.5 h-3.5 rounded-full border border-black/10 shadow-2xs"
+                                style={{ backgroundColor: opt.accentHex }}
+                              />
+                              <span
+                                className="text-xs font-bold leading-tight tracking-tight"
+                                style={{ color: opt.textHex }}
+                              >
+                                {opt.name}
+                              </span>
+                            </div>
+                            {isSelected && (
+                              <span
+                                className="text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs"
+                                style={{
+                                  backgroundColor: opt.accentSurfaceHex,
+                                  color: opt.accentHex,
+                                  borderColor: opt.accentHex,
+                                }}
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Active</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Live Document Preview Box */}
                           <div
-                            className="w-5 h-5 rounded-full shrink-0 border border-slate-300 flex items-center justify-center shadow-xs mt-0.5"
-                            style={{ backgroundColor: opt.bgHex }}
+                            className="rounded-lg p-2.5 border text-left flex flex-col gap-1.5 transition-transform group-hover:scale-[1.01]"
+                            style={{
+                              backgroundColor: opt.cardHex,
+                              borderColor: isSelected ? opt.accentHex : 'rgba(128,128,128,0.2)',
+                            }}
                           >
                             <div
-                              className="w-2 h-2 rounded-full"
-                              style={{ backgroundColor: opt.accentHex }}
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold leading-tight truncate">{opt.name}</span>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0 ml-1" />}
+                              className="text-xs font-bold leading-snug flex items-center justify-between"
+                              style={{ color: opt.textHex }}
+                            >
+                              <span>Aa Quick Heading</span>
+                              <span
+                                className="text-[9px] font-mono px-1 py-0.2 rounded"
+                                style={{
+                                  backgroundColor: opt.accentSurfaceHex,
+                                  color: opt.accentHex,
+                                }}
+                              >
+                                $STEPPER$
+                              </span>
                             </div>
-                            <p className="text-[10px] text-[var(--text-muted)] leading-tight mt-1">
+                            <p
+                              className="text-[10.5px] leading-relaxed line-clamp-2"
+                              style={{ color: opt.mutedHex }}
+                            >
                               {opt.description}
                             </p>
+                            <div
+                              className="text-[9.5px] font-mono px-1.5 py-0.5 rounded border inline-block w-fit mt-0.5"
+                              style={{
+                                backgroundColor: opt.bgHex,
+                                color: opt.textHex,
+                                borderColor: 'rgba(128,128,128,0.25)',
+                              }}
+                            >
+                              const speed = <span style={{ color: opt.accentHex }}>1000</span>;
+                            </div>
                           </div>
                         </button>
                       );
@@ -688,103 +776,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {/* 4. AI PROMPTS & SKILLS TAB */}
-            {activeTab === 'prompts' && (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/50">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 shrink-0">
-                      <Bot className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-[var(--text-primary)]">Ready-to-Use Agent Prompts</h4>
-                      <p className="text-[11px] text-[var(--text-muted)]">
-                        Equip ChatGPT, Claude, Gemini, or Cursor with VisualMD generation capabilities.
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                    <button
-                      onClick={handleCopyPrompt}
-                      disabled={promptLoading || !promptContent}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer disabled:opacity-40"
-                    >
-                      {promptCopied ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          <span className="text-emerald-500 font-semibold">Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={handleDownloadPrompt}
-                      disabled={promptLoading || !promptContent}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] hover:opacity-90 text-xs font-semibold transition-opacity cursor-pointer disabled:opacity-40 shadow-xs"
-                      title="Download prompt file"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Sub-Tabs: System Prompt / Skill / Standard */}
-                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)]">
-                  {[
-                    { id: 'system-prompt', label: '1. System Prompt', desc: 'ChatGPT / Claude / Gemini' },
-                    { id: 'skill', label: '2. Agent Skill (skill.md)', desc: 'Antigravity / Cursor' },
-                    { id: 'standard', label: '3. Language Standard', desc: 'Full Spec & AST Grammar' },
-                  ].map((sub) => {
-                    const isSelected = promptSubTab === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => setPromptSubTab(sub.id as any)}
-                        className={`flex-1 py-1.5 px-2.5 rounded-lg text-center transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-[var(--bg-card)] text-[var(--text-primary)] font-semibold shadow-2xs border border-[var(--border-color)]'
-                            : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                        }`}
-                      >
-                        <div className="text-xs font-medium leading-tight">{sub.label}</div>
-                        <div className="text-[10px] text-[var(--text-muted)] font-mono">{sub.desc}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Prompt Code Viewer */}
-                <div className="relative rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/30 overflow-hidden flex flex-col">
-                  <div className="px-3 py-1.5 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/80 flex items-center justify-between text-[11px] text-[var(--text-muted)] font-mono">
-                    <span>
-                      {promptSubTab === 'system-prompt' && 'prompts/system-prompt.md'}
-                      {promptSubTab === 'skill' && 'prompts/skill.md'}
-                      {promptSubTab === 'standard' && 'prompts/standard.md'}
-                    </span>
-                    <span>
-                      {promptLoading ? 'Loading...' : `${promptContent.split(/\s+/).filter(Boolean).length} words • ${promptContent.split('\n').length} lines`}
-                    </span>
-                  </div>
-
-                  <div className="p-3.5 max-h-[340px] overflow-y-auto font-mono text-[11px] leading-relaxed select-text whitespace-pre-wrap break-words text-[var(--text-primary)]">
-                    {promptLoading ? (
-                      <div className="py-12 flex flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
-                        <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                        <span>Loading prompt specification...</span>
-                      </div>
-                    ) : (
-                      promptContent || 'No prompt content available.'
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* 5. HELP & GUIDE TAB */}
             {activeTab === 'help' && (
@@ -845,7 +837,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     { key: '⌘ / Ctrl + B', action: 'Toggle Navigation Sidebar' },
                     { key: '⌘ / Ctrl + J', action: 'Toggle Bookmarks & Notes Drawer' },
                     { key: 'P', action: 'Toggle Executive Slide Deck Presentation' },
-                    { key: 'F', action: 'Toggle Fullscreen Reading in Browser' },
+                    { key: 'F11 (Fn+F11) / Esc', action: 'Toggle Fullscreen Reading (or Esc to Exit)' },
                     { key: 'Ctrl + / -', action: 'Increase or Decrease Font Scaling' },
                     { key: 'Ctrl + 0', action: 'Reset Font Scaling to 100%' },
                     { key: 'Ctrl + P', action: 'Export Clean PDF or Print Document' },
@@ -875,7 +867,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <VisualMDLogo size={38} />
                     <div>
                       <h4 className="text-sm font-bold">VisualMD Specification Engine</h4>
-                      <p className="text-xs text-[var(--text-muted)]">Version 1.0.242 • Production Ready</p>
+                      <p className="text-xs text-[var(--text-muted)]">Version {APP_VERSION} • Production Ready</p>
                     </div>
                   </div>
                   <p className="text-xs text-[var(--text-secondary)] leading-relaxed">

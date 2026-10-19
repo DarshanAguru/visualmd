@@ -1,6 +1,6 @@
 {
   "name": "@visualmd/server",
-  "version": "1.0.242",
+  "version": "1.0.244",
   "type": "module",
   "description": "VisualMD local-first persistence server and CLI daemon",
   "main": "dist/server.js",
@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --no-warnings --test tests/*.test.mjs"
   },
   "dependencies": {
     "@visualmd/compiler": "*",

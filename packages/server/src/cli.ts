@@ -6,6 +6,7 @@ import { exec, spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { VisualMDDatabase } from './db.js';
 import { createServer } from './server.js';
+import { SERVER_VERSION } from './version.js';
 import { parseVisualMD } from '../../compiler/dist/index.js';
 
 export function isPortAvailable(port: number): Promise<boolean> {
@@ -323,7 +324,7 @@ export async function runCLI() {
       }
       process.exit(0);
     } else if (arg === '--version' || arg === '-v' || arg === 'version') {
-      console.log('visualmd v1.0.242');
+      console.log(`visualmd v${SERVER_VERSION}`);
       process.exit(0);
     } else if (arg === '--port' || arg === '-p') {
       port = parseInt(args[++i], 10) || 5665;

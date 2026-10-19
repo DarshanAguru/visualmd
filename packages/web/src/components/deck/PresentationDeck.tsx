@@ -42,7 +42,7 @@ interface ThemeOption {
 }
 
 const THEME_OPTIONS: ThemeOption[] = [
-  // 7 Dark Themes
+  // 4 Curated Dark Modes
   {
     id: 'dark',
     name: 'Obsidian Dark',
@@ -68,30 +68,6 @@ const THEME_OPTIONS: ThemeOption[] = [
     description: 'Cyber neon indigo with vivid cyan & lavender accents',
   },
   {
-    id: 'dracula',
-    name: 'Dracula Velvet',
-    category: 'Dark & Modern',
-    bgHex: '#282a36',
-    accentHex: '#bd93f9',
-    description: 'Vampire dark purple with pastel orchid & pink highlights',
-  },
-  {
-    id: 'forest',
-    name: 'Forest Dark',
-    category: 'Dark & Modern',
-    bgHex: '#0c1512',
-    accentHex: '#10b981',
-    description: 'Deep pine emerald with luminous jade accents',
-  },
-  {
-    id: 'nord',
-    name: 'Nord Arctic',
-    category: 'Dark & Modern',
-    bgHex: '#242933',
-    accentHex: '#88c0d0',
-    description: 'Polar slate & arctic frost ice blue typography',
-  },
-  {
     id: 'retro',
     name: 'CRT Terminal',
     category: 'Dark & Modern',
@@ -99,13 +75,13 @@ const THEME_OPTIONS: ThemeOption[] = [
     accentHex: '#f59e0b',
     description: 'Phosphor amber monospace CRT on matte charcoal',
   },
-  // 4 Light & Paper Themes
+  // 3 Curated Light & Paper Modes
   {
     id: 'light',
-    name: 'Editorial Light',
+    name: 'Modern Clean Paper',
     category: 'Light & Paper',
     bgHex: '#ffffff',
-    accentHex: '#18181b',
+    accentHex: '#2563eb',
     description: 'Crisp editorial white with dark charcoal typography',
   },
   {
@@ -123,14 +99,6 @@ const THEME_OPTIONS: ThemeOption[] = [
     bgHex: '#f4ecd8',
     accentHex: '#9a3412',
     description: 'Antique library parchment with warm espresso serif',
-  },
-  {
-    id: 'paper',
-    name: 'Minimal Paper',
-    category: 'Light & Paper',
-    bgHex: '#f8f9fa',
-    accentHex: '#2563eb',
-    description: 'Soft eggshell paper with clean modern typography',
   },
 ];
 

@@ -1,0 +1,68 @@
+# Deep Work & High-Performance Study Playbook
+
+$METRICS$S
+Focus Sprint: 25 mins | Short Break: 5 mins | Long Break: 15 mins | Daily Target: 4 Sessions
+$METRICS$E
+
+$CALLOUT$S?type=insight&title=The+Feynman+Technique+Principle
+If you cannot explain a concept simply using plain language, you do not truly understand it yet. True mastery comes from stripping away jargon until the core idea is obvious.
+$CALLOUT$E
+
+---
+
+## 1. Proven Learning Frameworks
+
+$TABS$S
+$TAB?title=The+Feynman+Technique
+### 4 Steps to Deconstruct Complex Ideas
+1. **Choose a Topic**: Write the concept name at the top of your page.
+2. **Teach It Simply**: Explain it as if teaching a 12-year-old student, avoiding technical buzzwords.
+3. **Identify Knowledge Gaps**: When you get stuck or use vague terms, revisit your source material.
+4. **Simplify & Create Analogies**: Connect the abstract concept to an intuitive real-world analogy.
+
+$TAB?title=Active+Recall
+### Testing Yourself Before You Feel Ready
+- **The Testing Effect**: Taking a test or quiz after learning doubles long-term retention compared to re-reading.
+- **Closed-Book Summaries**: Close the book and write down everything you remember from memory before checking the notes.
+- **Embedded Quizzes**: Use `$QUIZ$` blocks throughout your notes to challenge yourself on subsequent reviews.
+
+$TAB?title=The+Pomodoro+Protocol
+### Synchronizing with Ultradian Rhythms
+- **25-Minute Focus Window**: The human prefrontal cortex maintains peak alertness for 20 to 30 minutes before cognitive fatigue begins.
+- **5-Minute Reset**: Stepping away from screens during breaks allows dopamine and adenosine to recalibrate.
+- **12-Week Streak Tracking**: Logging your daily focus sessions builds a visual habit loop like GitHub commits.
+$TABS$E
+
+---
+
+## 2. The 4-Phase Deep Work Session
+
+$STEPPER$S?title=Daily+Study+Sprint+Workflow
+$STEP@1?title=Eliminate+Friction+&+Distractions
+Close all distracting browser tabs, put your phone in another room or on Do Not Disturb, and set your workspace theme.
+$STEP@2?title=Start+the+25-Minute+Focus+Timer
+Click the timer in the top header and begin reading or problem-solving. Stay locked onto a single problem until the bell rings.
+$STEP@3?title=Quick+Knowledge+Checkpoint
+Before taking your break, write down 1 key takeaway or answer an interactive quiz question to lock the memory in place.
+$STEP@4?title=Mindful+5-Minute+Rest
+Stand up, stretch, drink a glass of water, and look at objects in the far distance to rest your ocular muscles.
+$STEPPER$E
+
+---
+
+## 3. Focus Knowledge Check
+
+$QUIZ$S?q=What+is+the+most+effective+action+during+a+5-minute+Pomodoro+short+break?
+[ ] Scroll social media on your phone
+[x] Step away from screens, hydrate, and stretch
+[ ] Start reading emails immediately
+> **Taking physical rest** away from digital screens allows the brain's default mode network to consolidate the memory schemas formed during the focus sprint.
+$QUIZ$E
+
+---
+
+## 4. Study Habit Automation
+
+$CALLOUT$S?type=tip&title=Consistency+Over+Intensity
+Studying for two 25-minute sessions every day beats a 10-hour weekend cram session every single time. Check your **Study Activity & Heatmap** daily to keep your learning streak alive!
+$CALLOUT$E

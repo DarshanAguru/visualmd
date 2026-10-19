@@ -60,3 +60,17 @@ When filing an issue, please include:
 - Operating System and Node version (`node -v`).
 - Minimal reproducible example document (`.vmd` or `.md`).
 - Expected vs. actual behavior.
+
+---
+
+## 5. Synchronizing & Bumping Version
+
+VisualMD includes a universal synchronization script that updates the version across all monorepo packages, server endpoints, web app branding, documentation badges, and security policies without making any git commits or git pushes:
+
+```bash
+npm run bump <version>
+
+# Examples:
+npm run bump 1.0.244
+npm run bump 2.0.0
+```

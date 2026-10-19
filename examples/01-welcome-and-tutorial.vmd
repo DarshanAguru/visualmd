@@ -1,0 +1,64 @@
+# Welcome to VisualMD: Interactive Notes & Study Guide
+
+$METRICS$S
+Visual Interactivity: 100% | Focus Score: 98% | Token Efficiency: 65% Less Tokens | Study Streaks: Active
+$METRICS$E
+
+$CALLOUT$S?type=insight&title=Welcome+to+Your+New+Learning+Workspace
+VisualMD transforms plain, boring markdown notes into reactive, visual learning documents. Whether you are studying complex topics, taking research notes, or preparing architectural docs, VisualMD makes learning visual, structured, and engaging.
+$CALLOUT$E
+
+---
+
+## 1. Static Notes vs Reactive VisualMD
+
+$TABS$S
+$TAB?title=Traditional+Notes
+### Why Static Plaintext Fails
+- **Visual Monotony**: Walls of unformatted text lead to reading fatigue and low retention.
+- **No Interactivity**: Static lists cannot simulate step-by-step algorithms, workflows, or timelines.
+- **Passive Reading**: Without embedded quizzes or checkpoints, learning remains passive.
+- **Cluttered Tools**: Heavy note-taking apps require constant manual styling and complex databases.
+
+$TAB?title=VisualMD+Notebooks
+### Why VisualMD Accelerates Learning
+- **Zero-Friction Markdown**: Write or prompt standard Markdown with lightweight interactive macros.
+- **Interactive Widgets**: Turn steps into clickable Steppers, compare concepts with Tabs, and test memory with Quizzes.
+- **Built-in Deep Work**: Stay in the flow with a distraction-free Pomodoro timer and GitHub-style study streaks.
+- **Executive Slide Decks**: Press `P` anytime to turn your document into a presentation-ready 16:9 slide deck.
+$TABS$E
+
+---
+
+## 2. Master Any Subject in 3 Steps
+
+$STEPPER$S?title=The+VisualMD+Learning+Loop
+$STEP@1?title=Capture+&+Structure
+Paste your study notes or ask ChatGPT, Claude, or Cursor to format your notes with VisualMD macros. Use the **AI Prompts** button in the top navigation bar to copy system prompts in 1 click.
+$STEP@2?title=Active+Recall+&+Testing
+Transform key definitions into interactive quizzes and flashcards. Testing your recall right inside your notes strengthens neural pathways much more than passive re-reading.
+$STEP@3?title=Sprint+with+Pomodoro
+Click the **Focus Timer** in the top bar to run 25-minute deep work sprints. Every minute you study is recorded in your 12-week study heatmap, keeping your learning streaks alive!
+$STEPPER$E
+
+---
+
+## 3. Quick Knowledge Check
+
+$QUIZ$S?q=Which+study+technique+produces+the+highest+long-term+knowledge+retention?
+[ ] Passive re-reading of highlighted text
+[x] Active recall and spaced retrieval practice
+[ ] Cramming for 8 hours without breaks
+> **Active recall** forces the brain to retrieve information from memory, which builds stronger synaptic connections and guarantees long-term retention.
+$QUIZ$E
+
+---
+
+## 4. Helpful Keyboard Shortcuts
+
+$CALLOUT$S?type=tip&title=Power-User+Shortcuts
+- **Press `P`**: Toggle instant 16:9 fullscreen Presentation Slide Deck.
+- **Cmd+K / Ctrl+K**: Open global search palette to jump to any document or note instantly.
+- **Double-Click**: Double-click any section header to drop a persistent bookmark.
+- **Select Text**: Highlight text with colors or attach personal marginalia notes.
+$CALLOUT$E

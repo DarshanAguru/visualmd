@@ -42,6 +42,7 @@ import {
   SlidersHorizontal,
   HelpCircle,
   Settings,
+  Flame,
 } from 'lucide-react';
 import { HistoryDrawer } from '../modals/HistoryDrawer';
 import { PomodoroTimer } from '../study/PomodoroTimer';
@@ -66,6 +67,7 @@ interface DocumentViewerProps {
   }) => void;
   onOpenNotesDrawer: () => void;
   onOpenPromptsModal: () => void;
+  onOpenStudyStats?: () => void;
   onOpenTutorial?: () => void;
   onOpenSettings?: (tab?: SettingsTab) => void;
   onStartPresentation: () => void;
@@ -89,7 +91,7 @@ interface ThemeOption {
 }
 
 const THEME_OPTIONS: ThemeOption[] = [
-  // 7 Dark Themes
+  // 4 Curated Dark Modes
   {
     id: 'dark',
     name: 'Obsidian Dark',
@@ -115,30 +117,6 @@ const THEME_OPTIONS: ThemeOption[] = [
     description: 'Cyber neon indigo with vivid cyan & lavender accents',
   },
   {
-    id: 'dracula',
-    name: 'Dracula Velvet',
-    category: 'Dark & Modern',
-    bgHex: '#282a36',
-    accentHex: '#bd93f9',
-    description: 'Vampire dark purple with pastel orchid & pink highlights',
-  },
-  {
-    id: 'forest',
-    name: 'Forest Dark',
-    category: 'Dark & Modern',
-    bgHex: '#0c1512',
-    accentHex: '#10b981',
-    description: 'Deep pine emerald with luminous jade accents',
-  },
-  {
-    id: 'nord',
-    name: 'Nord Arctic',
-    category: 'Dark & Modern',
-    bgHex: '#242933',
-    accentHex: '#88c0d0',
-    description: 'Polar slate & arctic frost ice blue typography',
-  },
-  {
     id: 'retro',
     name: 'CRT Terminal',
     category: 'Dark & Modern',
@@ -146,13 +124,13 @@ const THEME_OPTIONS: ThemeOption[] = [
     accentHex: '#f59e0b',
     description: 'Phosphor amber monospace CRT on matte charcoal',
   },
-  // 4 Light & Paper Themes
+  // 3 Curated Light & Paper Modes
   {
     id: 'light',
-    name: 'Editorial Light',
+    name: 'Modern Clean Paper',
     category: 'Light & Paper',
     bgHex: '#ffffff',
-    accentHex: '#18181b',
+    accentHex: '#2563eb',
     description: 'Crisp editorial white with dark charcoal typography',
   },
   {
@@ -170,14 +148,6 @@ const THEME_OPTIONS: ThemeOption[] = [
     bgHex: '#f4ecd8',
     accentHex: '#9a3412',
     description: 'Antique library parchment with warm espresso serif',
-  },
-  {
-    id: 'paper',
-    name: 'Minimal Paper',
-    category: 'Light & Paper',
-    bgHex: '#f8f9fa',
-    accentHex: '#2563eb',
-    description: 'Soft eggshell paper with clean modern typography',
   },
 ];
 
@@ -256,6 +226,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   onAddAnnotation,
   onOpenNotesDrawer,
   onOpenPromptsModal,
+  onOpenStudyStats,
   onOpenTutorial,
   onOpenSettings,
   onStartPresentation,
@@ -347,7 +318,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
         doc.fullscreenElement ||
         doc.webkitFullscreenElement ||
         doc.mozFullScreenElement ||
-        doc.msFullscreenElement
+        doc.msFullscreenElement ||
+        (window.innerHeight === screen.height && window.innerWidth === screen.width)
       );
       setIsFullscreen(isFull);
     };
@@ -355,11 +327,13 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    window.addEventListener('resize', handleFullscreenChange);
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      window.removeEventListener('resize', handleFullscreenChange);
     };
   }, []);
 
@@ -629,6 +603,28 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           {/* Pomodoro Study Timer */}
           <PomodoroTimer onOpenSettings={() => onOpenSettings && onOpenSettings('pomodoro')} />
 
+          {/* Study Activity & LeetCode Heatmap Button */}
+          {onOpenStudyStats && (
+            <button
+              onClick={onOpenStudyStats}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] text-xs font-medium transition-colors shadow-xs cursor-pointer group"
+              title="View Study Activity, LeetCode Heatmap & Streaks"
+            >
+              <Flame className="w-3.5 h-3.5 text-orange-500 group-hover:scale-110 transition-transform" />
+              <span className="hidden sm:inline">Activity</span>
+            </button>
+          )}
+
+          {/* AI Prompts & Skills Button */}
+          <button
+            onClick={onOpenPromptsModal}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] text-xs font-medium transition-colors shadow-xs cursor-pointer group"
+            title="AI Prompts & Agent Skills for ChatGPT, Claude, Cursor, and Gemini"
+          >
+            <Bot className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" />
+            <span className="hidden lg:inline">AI Prompts</span>
+          </button>
+
           {/* Bookmarks & Notes Button */}
           <button
             onClick={onOpenNotesDrawer}
@@ -736,18 +732,22 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           {/* Fullscreen Mode Toggle */}
           <button
             onClick={handleToggleFullscreen}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all shadow-xs cursor-pointer"
-            title={isFullscreen ? 'Exit Fullscreen (F / Esc)' : 'View Fullscreen in Browser (F)'}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all shadow-xs cursor-pointer ${
+              isFullscreen
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 font-semibold'
+                : 'bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+            title={isFullscreen ? 'Exit Fullscreen (F11 / Esc)' : 'View Fullscreen in Browser (F11)'}
           >
             {isFullscreen ? (
               <>
                 <Minimize2 className="w-3.5 h-3.5 text-amber-500" />
-                <span className="hidden xl:inline">Exit Full</span>
+                <span className="hidden sm:inline">Exit Fullscreen</span>
               </>
             ) : (
               <>
                 <Maximize2 className="w-3.5 h-3.5 text-blue-500" />
-                <span className="hidden xl:inline">Fullscreen</span>
+                <span className="hidden sm:inline">Fullscreen</span>
               </>
             )}
           </button>

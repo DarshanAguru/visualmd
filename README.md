@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: >=22](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
-[![Version: v1.0.242](https://img.shields.io/badge/Version-v1.0.242-purple.svg)](SECURITY)
+[![Version: v1.0.244](https://img.shields.io/badge/Version-v1.0.244-purple.svg)](SECURITY)
 ---
 
 ## ⚡ Why VisualMD?
@@ -250,7 +250,7 @@ visualmd/
 ├── CONTRIBUTING.md                    # Contribution guidelines & developer setup
 ├── SECURITY.md                        # Enterprise security policy & sandbox guarantees
 ├── README.md                          # Main project documentation
-├── package.json                       # Monorepo configuration (version 1.0.242)
+├── package.json                       # Monorepo configuration (version 1.0.244)
 ├── prompts/                           # Centralized AI skills, prompts & specifications
 │   ├── skill.md                       # Agent skill for Antigravity, Claude, Cursor
 │   ├── VisualMDStandard.md            # Complete VisualMD standard specification
@@ -272,9 +272,8 @@ visualmd/
 │       ├── src/components/modals/     # HistoryDrawer, PromptsModal, SearchModal, ImportModal
 │       └── src/components/document/   # Document viewer & annotations
 └── examples/                          # Seed demonstration documents
-    ├── 01-kafka-vs-redis.vmd          # Distributed systems architecture
-    ├── 02-dijkstra-algorithm.vmd      # Interactive algorithm & canvas sandbox
-    └── 03-raft-consensus.vmd          # Step-by-step consensus visualization
+    ├── 01-welcome-and-tutorial.vmd        # Interactive welcome & starter guide
+    └── 02-deep-work-and-study-guide.vmd   # Deep work habits & learning frameworks
 ```
 
 ---

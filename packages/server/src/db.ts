@@ -487,6 +487,11 @@ export class VisualMDDatabase {
   }
 
   // Bookmarks
+  public getBookmarks(docId: string): BookmarkRecord[] {
+    const bStmt = this.db.prepare('SELECT * FROM bookmarks WHERE doc_id = ? ORDER BY created_at ASC');
+    return bStmt.all(docId) as unknown as BookmarkRecord[];
+  }
+
   public toggleBookmark(docId: string, nodeId: string, label: string | null = null): { added: boolean } {
     const findStmt = this.db.prepare('SELECT id FROM bookmarks WHERE doc_id = ? AND node_id = ?');
     const existing = findStmt.get(docId, nodeId) as { id: string } | undefined;
@@ -509,6 +514,11 @@ export class VisualMDDatabase {
   }
 
   // Annotations
+  public getAnnotations(docId: string): AnnotationRecord[] {
+    const aStmt = this.db.prepare('SELECT * FROM annotations WHERE doc_id = ? ORDER BY created_at ASC');
+    return aStmt.all(docId) as unknown as AnnotationRecord[];
+  }
+
   public addAnnotation(
     docId: string,
     nodeId: string,
@@ -703,6 +713,7 @@ export class VisualMDDatabase {
   // Seed default examples into an "Examples" directory in the virtual file explorer and dataDir
   public seedIfEmpty(examplesDir: string, dataDir?: string) {
     if (this.getSetting('examples_seeded') === 'true' || this.getSetting('examples_deleted') === 'true') {
+      this.seedStarterAnnotationsAndBookmarks();
       return;
     }
 
@@ -759,7 +770,86 @@ export class VisualMDDatabase {
       }
     }
 
+    this.seedStarterAnnotationsAndBookmarks();
     this.setSetting('examples_seeded', 'true');
+  }
+
+  // Seed starter annotations and bookmarks on tutorial documents for demonstration
+  public seedStarterAnnotationsAndBookmarks() {
+    if (this.getSetting('starter_annotations_seeded') === 'true') {
+      return;
+    }
+
+    const docs = this.getDocuments();
+    const tutorialDoc = docs.find((d) =>
+      (d.file_path && d.file_path.includes('01-welcome-and-tutorial')) ||
+      (d.title && d.title.toLowerCase().includes('welcome to visualmd'))
+    );
+
+    if (tutorialDoc) {
+      const existingBookmarks = this.getBookmarks(tutorialDoc.id);
+      if (existingBookmarks.length === 0) {
+        this.toggleBookmark(tutorialDoc.id, 'node-3', '1. Static Notes vs Reactive VisualMD');
+        this.toggleBookmark(tutorialDoc.id, 'node-6', '2. Master Any Subject in 3 Steps');
+      }
+
+      const existingAnnotations = this.getAnnotations(tutorialDoc.id);
+      if (existingAnnotations.length === 0) {
+        // Yellow highlight with marginalia note
+        this.addAnnotation(
+          tutorialDoc.id,
+          'node-2',
+          'reactive, visual learning documents',
+          'Welcome to VisualMD! Hover over highlighted text to read marginalia notes, or press Ctrl+J to open all notes.',
+          'yellow',
+          0
+        );
+        // Emerald highlight
+        this.addAnnotation(
+          tutorialDoc.id,
+          'node-2',
+          'visual, structured, and engaging',
+          'Highlighted snippet',
+          'emerald',
+          0
+        );
+        // Sky highlight with study note on stepper
+        this.addAnnotation(
+          tutorialDoc.id,
+          'node-6',
+          'strengthens neural pathways',
+          'Testing yourself directly inside your notes strengthens neural pathways and dramatically boosts long-term retention.',
+          'sky',
+          0
+        );
+      }
+    }
+
+    const guideDoc = docs.find((d) =>
+      (d.file_path && d.file_path.includes('02-deep-work')) ||
+      (d.title && d.title.toLowerCase().includes('deep work'))
+    );
+
+    if (guideDoc) {
+      const existingBookmarks = this.getBookmarks(guideDoc.id);
+      if (existingBookmarks.length === 0) {
+        this.toggleBookmark(guideDoc.id, 'node-3', '1. Proven Learning Frameworks');
+      }
+
+      const existingAnnotations = this.getAnnotations(guideDoc.id);
+      if (existingAnnotations.length === 0) {
+        this.addAnnotation(
+          guideDoc.id,
+          'node-2',
+          'stripping away jargon until the core idea is obvious',
+          'The Feynman Principle: Explain complex ideas in plain English so anyone can understand.',
+          'purple',
+          0
+        );
+      }
+    }
+
+    this.setSetting('starter_annotations_seeded', 'true');
   }
 
   // --- Version Control System (VCS) Methods ---

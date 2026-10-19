@@ -147,10 +147,10 @@ async function main() {
   // 1. Start Internal Backend Server
   console.log(`${YELLOW}[1/2] Initializing VisualMD Internal Backend Engine...${RESET}`);
   const cliPath = path.resolve(rootDir, 'packages', 'server', 'dist', 'cli.js');
-  const serverProc = spawn(process.execPath, [cliPath, ...cliArgs], {
+  const serverProc = spawn(process.execPath, ['--no-warnings', cliPath, ...cliArgs], {
     cwd: rootDir,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, NODE_ENV: 'development' },
+    env: { ...process.env, NODE_NO_WARNINGS: '1', NODE_ENV: 'development' },
   });
 
   serverProc.on('error', (err) => {
@@ -181,7 +181,13 @@ async function main() {
   serverProc.stderr.on('data', (chunk) => {
     const lines = chunk.toString().trim().split('\n');
     for (const line of lines) {
-      if (line.trim()) {
+      const trimmed = line.trim();
+      if (
+        trimmed &&
+        !trimmed.includes('ExperimentalWarning') &&
+        !trimmed.includes('SQLite is an experimental feature') &&
+        !trimmed.includes('node --trace-warnings')
+      ) {
         console.error(`${YELLOW}[Backend Error]${RESET} ${line}`);
       }
     }

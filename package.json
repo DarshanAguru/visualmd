@@ -1,6 +1,6 @@
 {
   "name": "visualmd",
-  "version": "1.0.242",
+  "version": "1.0.244",
   "type": "module",
   "description": "VisualMD: Token-efficient interactive visual markdown workspace for AI-era engineers",
   "main": "packages/server/dist/index.js",
@@ -17,12 +17,13 @@
     "build:web": "npm run build --workspace=@visualmd/web",
     "build": "npm run build:compiler && npm run build:web && npm run build:server",
     "prepare": "npm run build",
-    "start": "node packages/server/dist/cli.js",
-    "start:local": "node packages/server/dist/cli.js",
+    "start": "node --no-warnings packages/server/dist/cli.js",
+    "start:local": "node --no-warnings packages/server/dist/cli.js",
     "dev": "node scripts/dev.mjs",
     "pretest": "npm run build:compiler && npm run build:server",
     "test": "npm run test --workspace=@visualmd/compiler && npm run test --workspace=@visualmd/server",
     "install:cli": "npm link",
+    "bump": "node scripts/bump-version.mjs",
     "dev:web": "npm run dev --workspace=@visualmd/web",
     "dev:server": "npm run dev --workspace=@visualmd/server"
   },

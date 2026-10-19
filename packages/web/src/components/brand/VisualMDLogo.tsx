@@ -1,4 +1,5 @@
 import React from 'react';
+import { APP_VERSION } from '../../version';
 
 interface VisualMDLogoProps {
   size?: number;
@@ -112,7 +113,7 @@ export const VisualMDLogo: React.FC<VisualMDLogoProps> = ({
               Visual<span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-clip-text text-transparent">MD</span>
             </span>
             <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-blue-500/10 text-blue-500 border border-blue-500/20">
-              v1.0
+              v{APP_VERSION}
             </span>
           </div>
           <span className="text-[9.5px] font-mono tracking-wider uppercase text-[var(--text-muted)] -mt-0.5">

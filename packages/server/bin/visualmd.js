@@ -2,11 +2,11 @@
 
 process.removeAllListeners('warning');
 process.on('warning', (warning) => {
-  if (warning.name === 'ExperimentalWarning') return;
+  if (warning.name === 'ExperimentalWarning' || (warning.message && warning.message.includes('SQLite'))) return;
   console.warn(warning);
 });
 
-import { runCLI } from '../dist/cli.js';
+const { runCLI } = await import('../dist/cli.js');
 
 runCLI().catch((err) => {
   console.error('[VisualMD] Fatal error:', err);

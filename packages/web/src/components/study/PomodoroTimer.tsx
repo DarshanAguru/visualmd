@@ -13,10 +13,12 @@ import {
   ChevronDown,
   X,
   CheckCircle2,
+  Settings,
 } from 'lucide-react';
 
 import { BreakScreensaver } from './BreakScreensaver';
 import { PomodoroToast, PomodoroToastData } from './PomodoroToast';
+import { recordCompletedSession, recordStudyTime } from './StudyStatsModal';
 
 export type PomodoroMode = 'focus' | 'short_break' | 'long_break';
 
@@ -319,16 +321,54 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [isOpen]);
 
-  // Timer Tick Engine
+  // Real-time study & break time accumulator
+  const accumulatedSecondsRef = useRef<{ focus: number; short_break: number; long_break: number }>({
+    focus: 0,
+    short_break: 0,
+    long_break: 0,
+  });
+
+  // Flush accrued partial time (e.g. 20 mins of focus before reset, or break time)
+  const flushAccruedTime = useCallback((targetMode: PomodoroMode) => {
+    const secs = accumulatedSecondsRef.current[targetMode];
+    if (secs >= 15) {
+      // Round to nearest minute, minimum 1 min
+      const mins = Math.max(1, Math.round(secs / 60));
+      recordStudyTime(targetMode, mins, false);
+    }
+    accumulatedSecondsRef.current[targetMode] = 0;
+  }, []);
+
+  // Flush accrued time when user leaves or refreshes the window
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      flushAccruedTime(mode);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [mode, flushAccruedTime]);
+
+  // Timer Tick Engine with Real-Time Accuracy
   useEffect(() => {
     if (!isRunning) return;
 
     const interval = setInterval(() => {
+      // Accumulate 1 second for active mode
+      accumulatedSecondsRef.current[mode] += 1;
+      // Every 60 seconds, flush 1 minute to prevent any data loss
+      if (accumulatedSecondsRef.current[mode] >= 60) {
+        recordStudyTime(mode, 1, false);
+        accumulatedSecondsRef.current[mode] -= 60;
+      }
+
       setTimeLeft((prev) => {
         if (prev <= 1) {
           // Timer finished
           clearInterval(interval);
           setIsRunning(false);
+
+          // Flush any remaining partial seconds
+          flushAccruedTime(mode);
 
           if (settings.soundEnabled) {
             playChime(mode === 'focus' ? 'complete' : 'break', 3);
@@ -337,6 +377,8 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
           if (mode === 'focus') {
             const nextCount = sessionsCompleted + 1;
             setSessionsCompleted(nextCount);
+            // Mark completed session
+            recordStudyTime('focus', 0, true);
 
             // Every 4 focus sessions, switch to long break
             const nextMode: PomodoroMode = nextCount % 4 === 0 ? 'long_break' : 'short_break';
@@ -390,19 +432,32 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning, mode, sessionsCompleted, settings, getDurationForMode]);
+  }, [isRunning, mode, sessionsCompleted, settings, getDurationForMode, flushAccruedTime]);
 
   const handleTogglePlay = () => {
     requestNotificationPermission();
+    if (isRunning) {
+      // Pausing: flush any accrued time so user's work is recorded immediately
+      flushAccruedTime(mode);
+    } else {
+      // When starting a break, activate the serene frosted break overlay immediately
+      if (mode === 'short_break' || mode === 'long_break') {
+        setIsScreensaverActive(true);
+      }
+    }
     setIsRunning((prev) => !prev);
   };
 
   const handleReset = () => {
+    // Flush any accrued time before resetting so partial study time is never lost
+    flushAccruedTime(mode);
     setIsRunning(false);
     setTimeLeft(getDurationForMode(mode));
   };
 
   const handleSwitchMode = (newMode: PomodoroMode) => {
+    // Flush accrued time from previous mode
+    flushAccruedTime(mode);
     setIsRunning(false);
     setMode(newMode);
     setTimeLeft(getDurationForMode(newMode));
@@ -412,12 +467,15 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
   };
 
   const handleToastAction = (nextMode: PomodoroMode) => {
+    flushAccruedTime(mode);
     requestNotificationPermission();
     setMode(nextMode);
     setTimeLeft(getDurationForMode(nextMode));
     setIsRunning(true);
     if (nextMode === 'focus') {
       setIsScreensaverActive(false);
+    } else {
+      setIsScreensaverActive(true);
     }
   };
 
@@ -643,18 +701,28 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
                     <VolumeX className="w-3.5 h-3.5 opacity-60" />
                   )}
                 </button>
-                {onOpenSettings && (
-                  <button
-                    onClick={() => {
-                      setIsOpen(false);
-                      onOpenSettings();
-                    }}
-                    className="text-[10px] text-blue-500 hover:underline cursor-pointer"
-                  >
-                    Settings
-                  </button>
-                )}
               </div>
+            </div>
+
+            {/* Timer Settings Button so user can customize all timers and sounds as needed */}
+            <div className="mt-2 pt-2 border-t border-[var(--border-color)]">
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  if (onOpenSettings) onOpenSettings();
+                }}
+                className="w-full py-1.5 px-2.5 rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[11px] text-[var(--text-primary)] font-medium flex items-center justify-between transition-colors cursor-pointer group"
+                title="Change focus duration, short break, and long break in Settings"
+              >
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <Settings className="w-3.5 h-3.5 text-blue-500 group-hover:rotate-45 transition-transform" />
+                  <span>Timer Settings</span>
+                </span>
+                <span className="text-[10px] text-blue-500 font-mono group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                  <span>{settings.focusDuration}m / {settings.shortBreakDuration}m / {settings.longBreakDuration}m</span>
+                  <span>→</span>
+                </span>
+              </button>
             </div>
 
             {/* If in break mode, allow 1-click ambient break screensaver */}
@@ -686,6 +754,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onOpenSettings }) 
         totalDuration={totalModeDuration}
         isRunning={isRunning}
         onTogglePlay={handleTogglePlay}
+        onAddMinute={() => setTimeLeft((prev) => prev + 60)}
         onDismiss={() => setIsScreensaverActive(false)}
         onSkipToFocus={() => {
           setIsScreensaverActive(false);

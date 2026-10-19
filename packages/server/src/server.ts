@@ -7,6 +7,7 @@ import { VisualMDDatabase } from './db.js';
 import { parseVisualMD, validateVisualMD } from '../../compiler/dist/index.js';
 import { autoCommitDataChange } from './git.js';
 import { executeSandboxedCode } from './sandbox.js';
+import { SERVER_VERSION } from './version.js';
 
 function isPathInsideDir(targetPath: string, parentDir: string): boolean {
   try {
@@ -104,7 +105,7 @@ export function createServer(
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
       status: 'ok',
-      version: '1.0.242',
+      version: SERVER_VERSION,
       dbPath: db.dbPath,
       dataDir: dataDir ? path.resolve(dataDir) : null,
     });

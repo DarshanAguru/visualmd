@@ -9,6 +9,8 @@ import { SearchModal } from './components/modals/SearchModal';
 import { NewDocModal } from './components/modals/NewDocModal';
 import { ImportModal } from './components/modals/ImportModal';
 import { TutorialModal } from './components/modals/TutorialModal';
+import { PromptsModal } from './components/modals/PromptsModal';
+import { StudyStatsModal } from './components/study/StudyStatsModal';
 import {
   SettingsModal,
   SettingsTab,
@@ -43,6 +45,8 @@ export const App: React.FC = () => {
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('appearance');
+  const [isPromptsOpen, setIsPromptsOpen] = useState(false);
+  const [isStudyStatsOpen, setIsStudyStatsOpen] = useState(false);
 
   // Startup Tutorial: shown only once per start/session
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
@@ -437,9 +441,10 @@ export const App: React.FC = () => {
         }
       }
 
-      // 'f' without modifier: Toggle browser fullscreen
-      if (e.key.toLowerCase() === 'f' && !e.metaKey && !e.ctrlKey && !e.altKey && !isInput) {
+      // Fullscreen shortcut: strictly ONLY F11 (or Fn+F11) toggles fullscreen. Esc exits fullscreen.
+      if (e.key === 'F11') {
         e.preventDefault();
+        e.stopPropagation();
         const doc = document as any;
         const isFull = !!(
           doc.fullscreenElement ||
@@ -459,6 +464,29 @@ export const App: React.FC = () => {
             elem.msRequestFullscreen();
           }
         } else {
+          if (doc.exitFullscreen) {
+            doc.exitFullscreen().catch(() => {});
+          } else if (doc.webkitExitFullscreen) {
+            doc.webkitExitFullscreen();
+          } else if (doc.mozCancelFullScreen) {
+            doc.mozCancelFullScreen();
+          } else if (doc.msExitFullscreen) {
+            doc.msExitFullscreen();
+          }
+        }
+        return;
+      }
+
+      // Escape key exits browser fullscreen if active
+      if (e.key === 'Escape') {
+        const doc = document as any;
+        const isFull = !!(
+          doc.fullscreenElement ||
+          doc.webkitFullscreenElement ||
+          doc.mozFullScreenElement ||
+          doc.msFullscreenElement
+        );
+        if (isFull) {
           if (doc.exitFullscreen) {
             doc.exitFullscreen().catch(() => {});
           } else if (doc.webkitExitFullscreen) {
@@ -915,10 +943,8 @@ export const App: React.FC = () => {
             onDeleteAnnotation={handleDeleteAnnotation}
             onAddAnnotation={handleAddAnnotation}
             onOpenNotesDrawer={() => setIsNotesDrawerOpen((prev) => !prev)}
-            onOpenPromptsModal={() => {
-              setSettingsInitialTab('prompts');
-              setIsSettingsOpen(true);
-            }}
+            onOpenPromptsModal={() => setIsPromptsOpen(true)}
+            onOpenStudyStats={() => setIsStudyStatsOpen(true)}
             onOpenTutorial={() => setIsTutorialOpen(true)}
             onOpenSettings={(tab) => {
               setSettingsInitialTab(tab || 'appearance');
@@ -1016,6 +1042,23 @@ export const App: React.FC = () => {
           sessionStorage.setItem('visualmd-tutorial-session-seen', 'true');
           localStorage.setItem('visualmd-tutorial-completed', 'true');
         }}
+        onOpenDemoDoc={() => {
+          setIsTutorialOpen(false);
+          sessionStorage.setItem('visualmd-tutorial-session-seen', 'true');
+          localStorage.setItem('visualmd-tutorial-completed', 'true');
+          const demoDoc =
+            documents.find(
+              (d) =>
+                d.filename.toLowerCase().includes('welcome') ||
+                d.filename.toLowerCase().includes('tutorial') ||
+                d.filename.toLowerCase().includes('guide') ||
+                d.filename.toLowerCase().includes('study') ||
+                d.filename.toLowerCase().includes('demo')
+            ) || documents[0];
+          if (demoDoc) {
+            setSelectedDocId(demoDoc.id);
+          }
+        }}
       />
 
       {/* Settings, Themes, Canvas, Study & Help Modal */}
@@ -1033,6 +1076,18 @@ export const App: React.FC = () => {
           setIsSettingsOpen(false);
           setIsTutorialOpen(true);
         }}
+      />
+
+      {/* AI Prompts & Skills Modal */}
+      <PromptsModal
+        isOpen={isPromptsOpen}
+        onClose={() => setIsPromptsOpen(false)}
+      />
+
+      {/* Study Stats & Activity Modal */}
+      <StudyStatsModal
+        isOpen={isStudyStatsOpen}
+        onClose={() => setIsStudyStatsOpen(false)}
       />
     </div>
   );

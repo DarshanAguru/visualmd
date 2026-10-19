@@ -567,8 +567,63 @@ test('Server - Examples folder seeding and folder cascade deletion', async () =>
   }
 });
 
-test('Server (v1.0.242) - Health Version & Prefix FTS5 Search', async () => {
-  const tmpDb = path.join(os.tmpdir(), `vmd-test-v10242-${Date.now()}.db`);
+test('Server - Starter tutorial bookmarks and annotations are seeded on initial run', async () => {
+  const tmpDb = path.join(os.tmpdir(), `vmd-starter-test-${Date.now()}.db`);
+  const tmpDataDir = path.join(os.tmpdir(), `vmd-starter-data-${Date.now()}`);
+  const tmpExamplesDir = path.join(os.tmpdir(), `vmd-starter-src-${Date.now()}`);
+
+  fs.mkdirSync(tmpDataDir, { recursive: true });
+  fs.mkdirSync(tmpExamplesDir, { recursive: true });
+
+  const realWelcomePath = path.resolve(process.cwd(), 'examples/01-welcome-and-tutorial.vmd');
+  if (fs.existsSync(realWelcomePath)) {
+    fs.copyFileSync(realWelcomePath, path.join(tmpExamplesDir, '01-welcome-and-tutorial.vmd'));
+  } else {
+    fs.writeFileSync(
+      path.join(tmpExamplesDir, '01-welcome-and-tutorial.vmd'),
+      '# Welcome to VisualMD: Interactive Notes & Study Guide\n\n$CALLOUT$S?type=insight&title=Welcome\nreactive, visual learning documents and visual, structured, and engaging\n$CALLOUT$E\n\n## 1. Static Notes vs Reactive\nContent.\n\n$STEPPER$S?title=Loop\nstrengthens neural pathways\n$STEPPER$E',
+      'utf-8'
+    );
+  }
+
+  const db = new VisualMDDatabase(tmpDb);
+  const app = createServer(db, undefined, tmpDataDir);
+
+  const server = app.listen(0);
+  const port = server.address().port;
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    db.seedIfEmpty(tmpExamplesDir, tmpDataDir);
+
+    const docsRes = await fetch(`${baseUrl}/api/docs`);
+    const docs = await docsRes.json();
+    const welcomeDoc = docs.find((d) => d.title.toLowerCase().includes('welcome to visualmd'));
+    assert.ok(welcomeDoc, 'Welcome doc should be seeded');
+
+    // Fetch full document with annotations and bookmarks
+    const fullDocRes = await fetch(`${baseUrl}/api/docs/${welcomeDoc.id}`);
+    const fullDoc = await fullDocRes.json();
+
+    assert.ok(fullDoc.bookmarks && fullDoc.bookmarks.length >= 2, 'Should have seeded at least 2 bookmarks');
+    assert.ok(fullDoc.annotations && fullDoc.annotations.length >= 2, 'Should have seeded at least 2 annotations');
+    assert.ok(fullDoc.annotations.some((a) => a.note && a.note.includes('Welcome to VisualMD')), 'Should have welcome note');
+
+  } finally {
+    server.close();
+    db.close();
+    fs.rmSync(tmpDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    fs.rmSync(tmpExamplesDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    if (fs.existsSync(tmpDb)) fs.unlinkSync(tmpDb);
+    const walFile = `${tmpDb}-wal`;
+    const shmFile = `${tmpDb}-shm`;
+    if (fs.existsSync(walFile)) fs.unlinkSync(walFile);
+    if (fs.existsSync(shmFile)) fs.unlinkSync(shmFile);
+  }
+});
+
+test('Server (v1.0.244) - Health Version & Prefix FTS5 Search', async () => {
+  const tmpDb = path.join(os.tmpdir(), `vmd-test-v10244-${Date.now()}.db`);
   const db = new VisualMDDatabase(tmpDb);
   const app = createServer(db);
 
@@ -579,11 +634,11 @@ test('Server (v1.0.242) - Health Version & Prefix FTS5 Search', async () => {
   const baseUrl = `http://localhost:${port}`;
 
   try {
-    // 1. Check health returns version 1.0.242
+    // 1. Check health returns version 1.0.244
     const healthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(healthRes.status, 200);
     const health = await healthRes.json();
-    assert.equal(health.version, '1.0.242');
+    assert.equal(health.version, '1.0.244');
 
     // 2. Test prefix search in database
     db.createDocument('Distributed Consensus With Raft', 'Leader election and log replication algorithms in Raft.');
