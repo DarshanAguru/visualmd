@@ -199,9 +199,18 @@ export class VisualMDDatabase {
   }
 
   public getFolderById(id: string): FolderRecord | null {
+    if (!id || typeof id !== 'string') return null;
     const stmt = this.db.prepare('SELECT * FROM folders WHERE id = ?');
     const folder = stmt.get(id) as unknown as FolderRecord | undefined;
     return folder || null;
+  }
+
+  public sanitizeFolderId(folderId: any): string | null {
+    if (!folderId || typeof folderId !== 'string') return null;
+    const trimmed = folderId.trim();
+    if (!trimmed || trimmed === 'null' || trimmed === 'undefined' || trimmed === 'root') return null;
+    const exists = this.getFolderById(trimmed);
+    return exists ? trimmed : null;
   }
 
   public createFolder(name: string, parentId: string | null = null): FolderRecord {
@@ -256,6 +265,9 @@ export class VisualMDDatabase {
         deletedDocFilePaths.push(filePath);
       }
     }
+
+    // Explicitly disassociate any remaining documents that may point to this folder
+    this.db.prepare('UPDATE documents SET folder_id = NULL WHERE folder_id = ?').run(id);
 
     const stmt = this.db.prepare('DELETE FROM folders WHERE id = ?');
     stmt.run(id);
@@ -368,6 +380,7 @@ export class VisualMDDatabase {
     folderId: string | null = null,
     filePath: string | null = null
   ): DocumentRecord {
+    const validFolderId = this.sanitizeFolderId(folderId);
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const parsed = parseVisualMD(content);
@@ -378,7 +391,7 @@ export class VisualMDDatabase {
       INSERT INTO documents (id, folder_id, title, content, parsed_json, file_path, last_read_position, last_read_node, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)
     `);
-    stmt.run(id, folderId, finalTitle, content, parsedJson, filePath, now, now);
+    stmt.run(id, validFolderId, finalTitle, content, parsedJson, filePath, now, now);
 
     // Update FTS
     const ftsStmt = this.db.prepare(`INSERT INTO docs_fts (id, title, content) VALUES (?, ?, ?)`);
@@ -391,7 +404,7 @@ export class VisualMDDatabase {
 
     return {
       id,
-      folder_id: folderId,
+      folder_id: validFolderId,
       title: finalTitle,
       content,
       parsed_json: parsedJson,
@@ -425,11 +438,19 @@ export class VisualMDDatabase {
       } catch {}
     }
 
+    // Resolve and sanitize folderId: validate against folders table to prevent FK constraint failure
+    let folderId: string | null = null;
+    if (updates.folder_id !== undefined) {
+      folderId = this.sanitizeFolderId(updates.folder_id);
+    } else if (existing.folder_id) {
+      folderId = this.sanitizeFolderId(existing.folder_id);
+    }
+
     // Only bump updated_at if content, title, folder_id, or file_path actually changed
     const isSignificantChange =
       (updates.content !== undefined && updates.content !== existing.content) ||
       (updates.title !== undefined && updates.title !== existing.title) ||
-      (updates.folder_id !== undefined && updates.folder_id !== existing.folder_id) ||
+      (updates.folder_id !== undefined && folderId !== existing.folder_id) ||
       (updates.file_path !== undefined && updates.file_path !== existing.file_path);
 
     const updatedAt = isSignificantChange ? new Date().toISOString() : existing.updated_at;
@@ -446,7 +467,6 @@ export class VisualMDDatabase {
       title = updates.title;
     }
 
-    const folderId = updates.folder_id !== undefined ? updates.folder_id : existing.folder_id;
     const filePath = updates.file_path !== undefined ? updates.file_path : existing.file_path;
     const lastReadPos = updates.last_read_position !== undefined ? updates.last_read_position : existing.last_read_position;
     const lastReadNode = updates.last_read_node !== undefined ? updates.last_read_node : existing.last_read_node;
@@ -962,6 +982,12 @@ export class VisualMDDatabase {
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
     `);
     stmt.run(key, value, now);
+  }
+
+  public deleteSetting(key: string): void {
+    try {
+      this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+    } catch {}
   }
 
   public close() {

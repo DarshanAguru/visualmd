@@ -26,10 +26,11 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
   React.useEffect(() => {
     if (isOpen) {
-      setSelectedFolderId(currentFolderId || null);
+      const validFolder = folders.find((f) => f.id === currentFolderId);
+      setSelectedFolderId(validFolder ? validFolder.id : null);
       setImportError(null);
     }
-  }, [isOpen, currentFolderId]);
+  }, [isOpen, currentFolderId, folders]);
 
   if (!isOpen) return null;
 

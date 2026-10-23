@@ -253,114 +253,157 @@ export function createServer(
   });
 
   app.post('/api/folders', (req: Request, res: Response) => {
-    const { name, parent_id } = req.body;
-    if (!name || typeof name !== 'string') {
-      res.status(400).json({ error: 'Folder name is required' });
-      return;
+    try {
+      const { name, parent_id } = req.body;
+      if (!name || typeof name !== 'string') {
+        res.status(400).json({ error: 'Folder name is required' });
+        return;
+      }
+      const trimmed = name.trim();
+      if (!trimmed) {
+        res.status(400).json({ error: 'Folder name cannot be empty' });
+        return;
+      }
+
+      // If user is intentionally creating a folder named "Examples", clear the deletion flag
+      if (trimmed.toLowerCase() === 'examples') {
+        db.deleteSetting('examples_deleted');
+      }
+
+      const folder = db.createFolder(trimmed, parent_id || null);
+
+      // Create physical directory in dataDir immediately so syncDataDirectory never prunes it!
+      if (dataDir) {
+        const targetDir = path.resolve(dataDir, folder.name);
+        if (!fs.existsSync(targetDir)) {
+          try {
+            fs.mkdirSync(targetDir, { recursive: true });
+          } catch (err) {
+            console.error('[VisualMD] Failed to create folder directory on disk:', err);
+          }
+        }
+      }
+
+      broadcastEvent('sync', { type: 'folder_create', id: folder.id });
+      res.status(201).json(folder);
+    } catch (err: any) {
+      console.error('[VisualMD] Failed to create folder:', err);
+      res.status(500).json({ error: err.message || 'Failed to create folder' });
     }
-    const folder = db.createFolder(name.trim(), parent_id || null);
-    broadcastEvent('sync', { type: 'folder_create', id: folder.id });
-    res.status(201).json(folder);
   });
 
   app.put('/api/folders/:id', async (req: Request, res: Response) => {
-    const folderId = String(req.params.id);
-    const { name } = req.body;
-    if (!name || typeof name !== 'string' || !name.trim()) {
-      res.status(400).json({ error: 'Folder name is required' });
-      return;
-    }
-    const newName = name.trim();
-    const existingFolder = db.getFolderById(folderId);
-    if (!existingFolder) {
-      res.status(404).json({ error: 'Folder not found' });
-      return;
-    }
-
-    const oldName = existingFolder.name;
-    const updatedFolder = db.renameFolder(folderId, newName);
-
-    // Physically rename directory in dataDir if it exists
-    if (dataDir && oldName !== newName) {
-      const resolvedDataDir = path.resolve(dataDir);
-      const oldSubDir = path.join(resolvedDataDir, oldName);
-      const newSubDir = path.join(resolvedDataDir, newName);
-
-      if (fs.existsSync(oldSubDir) && isPathInsideDir(oldSubDir, resolvedDataDir)) {
-        try {
-          fs.renameSync(oldSubDir, newSubDir);
-          // Update file_paths of docs inside this folder
-          const docs = db.getDocuments(folderId);
-          for (const doc of docs) {
-            if (doc.file_path && isPathInsideDir(doc.file_path, oldSubDir)) {
-              const updatedPath = path.join(newSubDir, path.basename(doc.file_path));
-              db.updateDocument(doc.id, { file_path: updatedPath });
-            }
-          }
-        } catch (err) {
-          console.error('[VisualMD] Failed to rename physical directory:', err);
-        }
+    try {
+      const folderId = String(req.params.id);
+      const { name } = req.body;
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        res.status(400).json({ error: 'Folder name is required' });
+        return;
+      }
+      const newName = name.trim();
+      const existingFolder = db.getFolderById(folderId);
+      if (!existingFolder) {
+        res.status(404).json({ error: 'Folder not found' });
+        return;
       }
 
-      await autoCommitDataChange(dataDir, `Rename folder "${oldName}" to "${newName}"`);
-    }
+      const oldName = existingFolder.name;
+      const updatedFolder = db.renameFolder(folderId, newName);
 
-    broadcastEvent('sync', { type: 'folder_rename', id: folderId });
-    res.json(updatedFolder);
+      // Physically rename directory in dataDir if it exists
+      if (dataDir && oldName !== newName) {
+        const resolvedDataDir = path.resolve(dataDir);
+        const oldSubDir = path.join(resolvedDataDir, oldName);
+        const newSubDir = path.join(resolvedDataDir, newName);
+
+        if (fs.existsSync(oldSubDir) && isPathInsideDir(oldSubDir, resolvedDataDir)) {
+          try {
+            fs.renameSync(oldSubDir, newSubDir);
+            // Update file_paths of docs inside this folder
+            const docs = db.getDocuments(folderId);
+            for (const doc of docs) {
+              if (doc.file_path && isPathInsideDir(doc.file_path, oldSubDir)) {
+                const updatedPath = path.join(newSubDir, path.basename(doc.file_path));
+                db.updateDocument(doc.id, { file_path: updatedPath });
+              }
+            }
+          } catch (err) {
+            console.error('[VisualMD] Failed to rename physical directory:', err);
+          }
+        } else if (!fs.existsSync(newSubDir)) {
+          try {
+            fs.mkdirSync(newSubDir, { recursive: true });
+          } catch {}
+        }
+
+        await autoCommitDataChange(dataDir, `Rename folder "${oldName}" to "${newName}"`);
+      }
+
+      broadcastEvent('sync', { type: 'folder_rename', id: folderId });
+      res.json(updatedFolder);
+    } catch (err: any) {
+      console.error('[VisualMD] Failed to rename folder:', err);
+      res.status(500).json({ error: err.message || 'Failed to rename folder' });
+    }
   });
 
   app.delete('/api/folders/:id', async (req: Request, res: Response) => {
-    const folderId = String(req.params.id);
-    const existingFolder = db.getFolders().find((f) => f.id === folderId);
-    const folderName = existingFolder?.name || 'Folder';
-    const isExamples = folderName.toLowerCase() === 'examples';
+    try {
+      const folderId = String(req.params.id);
+      const existingFolder = db.getFolders().find((f) => f.id === folderId);
+      const folderName = existingFolder?.name || 'Folder';
+      const isExamples = folderName.toLowerCase() === 'examples';
 
-    const { deletedDocFilePaths } = db.deleteFolder(folderId);
+      const { deletedDocFilePaths } = db.deleteFolder(folderId);
 
-    // If user explicitly deleted the Examples folder, record it so it is never re-seeded or resurrected
-    if (isExamples) {
-      db.setSetting('examples_deleted', 'true');
-    }
+      // If user explicitly deleted the Examples folder, record it so it is never re-seeded or resurrected
+      if (isExamples) {
+        db.setSetting('examples_deleted', 'true');
+      }
 
-    // Physically remove deleted doc files in dataDir
-    if (dataDir) {
-      const resolvedDataDir = path.resolve(dataDir);
-      for (const filePath of deletedDocFilePaths) {
-        if (filePath && fs.existsSync(filePath)) {
-          const resolvedFilePath = path.resolve(filePath);
-          if (isPathInsideDir(resolvedFilePath, resolvedDataDir)) {
-            try {
-              fs.unlinkSync(resolvedFilePath);
-            } catch (err) {
-              console.error('[VisualMD] Failed to delete file when deleting folder:', err);
+      // Physically remove deleted doc files in dataDir
+      if (dataDir) {
+        const resolvedDataDir = path.resolve(dataDir);
+        for (const filePath of deletedDocFilePaths) {
+          if (filePath && fs.existsSync(filePath)) {
+            const resolvedFilePath = path.resolve(filePath);
+            if (isPathInsideDir(resolvedFilePath, resolvedDataDir)) {
+              try {
+                fs.unlinkSync(resolvedFilePath);
+              } catch (err) {
+                console.error('[VisualMD] Failed to delete file when deleting folder:', err);
+              }
             }
           }
         }
-      }
 
-      // If a physical folder directory matching this folder exists in dataDir, clean it up
-      if (existingFolder) {
-        const possibleSubDirs = [
-          path.resolve(dataDir, existingFolder.name),
-          path.resolve(dataDir, existingFolder.name.toLowerCase()),
-        ];
-        for (const subDir of possibleSubDirs) {
-          if (fs.existsSync(subDir) && isPathInsideDir(subDir, resolvedDataDir)) {
-            try {
-              fs.rmSync(subDir, { recursive: true, force: true });
-            } catch (err) {
-              console.error('[VisualMD] Failed to delete physical folder directory:', err);
+        // If a physical folder directory matching this folder exists in dataDir, clean it up
+        if (existingFolder) {
+          const possibleSubDirs = [
+            path.resolve(dataDir, existingFolder.name),
+            path.resolve(dataDir, existingFolder.name.toLowerCase()),
+          ];
+          for (const subDir of possibleSubDirs) {
+            if (fs.existsSync(subDir) && isPathInsideDir(subDir, resolvedDataDir)) {
+              try {
+                fs.rmSync(subDir, { recursive: true, force: true });
+              } catch (err) {
+                console.error('[VisualMD] Failed to delete physical folder directory:', err);
+              }
             }
           }
         }
+
+        // Auto-commit git changes
+        await autoCommitDataChange(dataDir, `Delete folder "${folderName}" and contained files`);
       }
 
-      // Auto-commit git changes
-      await autoCommitDataChange(dataDir, `Delete folder "${folderName}" and contained files`);
+      broadcastEvent('sync', { type: 'folder_delete', id: folderId });
+      res.json({ success: true, deletedDocCount: deletedDocFilePaths.length });
+    } catch (err: any) {
+      console.error('[VisualMD] Failed to delete folder:', err);
+      res.status(500).json({ error: err.message || 'Failed to delete folder' });
     }
-
-    broadcastEvent('sync', { type: 'folder_delete', id: folderId });
-    res.json({ success: true, deletedDocCount: deletedDocFilePaths.length });
   });
 
   // Settings API
@@ -421,126 +464,150 @@ export function createServer(
   });
 
   app.post('/api/docs', async (req: Request, res: Response) => {
-    const { title, content, folder_id } = req.body;
-    if (!content || typeof content !== 'string') {
-      res.status(400).json({ error: 'Document content is required' });
-      return;
-    }
+    try {
+      const { title, content, folder_id } = req.body;
+      if (!content || typeof content !== 'string') {
+        res.status(400).json({ error: 'Document content is required' });
+        return;
+      }
 
-    let targetPath: string | null = null;
-    if (dataDir) {
-      let targetDir = dataDir;
-      if (folder_id) {
-        const folder = db.getFolders().find((f) => f.id === folder_id);
-        if (folder) {
-          targetDir = path.join(dataDir, folder.name);
+      const validFolderId = db.sanitizeFolderId(folder_id);
+
+      let targetPath: string | null = null;
+      if (dataDir) {
+        let targetDir = dataDir;
+        if (validFolderId) {
+          const folder = db.getFolderById(validFolderId);
+          if (folder) {
+            targetDir = path.join(dataDir, folder.name);
+          }
+        }
+        if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+        targetPath = getSafeFileName(title || 'doc', targetDir);
+        try {
+          fs.writeFileSync(targetPath, content, 'utf-8');
+        } catch (err) {
+          console.error('[VisualMD] Failed to save document file in data folder:', err);
         }
       }
-      if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
-      targetPath = getSafeFileName(title || 'doc', targetDir);
-      try {
-        fs.writeFileSync(targetPath, content, 'utf-8');
-      } catch (err) {
-        console.error('[VisualMD] Failed to save document file in data folder:', err);
-      }
-    }
 
-    const doc = db.createDocument(title || '', content, folder_id || null, targetPath);
-    if (dataDir && targetPath) {
-      await autoCommitDataChange(dataDir, `Add document "${doc.title}"`, targetPath).catch(() => {});
+      const doc = db.createDocument(title || '', content, validFolderId, targetPath);
+      if (dataDir && targetPath) {
+        await autoCommitDataChange(dataDir, `Add document "${doc.title}"`, targetPath).catch(() => {});
+      }
+      broadcastEvent('sync', { type: 'doc_create', id: doc.id });
+      res.status(201).json(doc);
+    } catch (err: any) {
+      console.error('[VisualMD] Failed to create document:', err);
+      res.status(500).json({ error: err.message || 'Failed to create document' });
     }
-    broadcastEvent('sync', { type: 'doc_create', id: doc.id });
-    res.status(201).json(doc);
   });
 
   app.put('/api/docs/:id', async (req: Request, res: Response) => {
-    const existing = db.getDocumentById(String(req.params.id));
-    if (!existing) {
-      res.status(404).json({ error: 'Document not found' });
-      return;
-    }
+    try {
+      const existing = db.getDocumentById(String(req.params.id));
+      if (!existing) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
 
-    let updatedFilePath = existing.file_path;
+      let updatedFilePath = existing.file_path;
+      let targetFolderId: string | null | undefined = undefined;
+      if (req.body.folder_id !== undefined) {
+        targetFolderId = db.sanitizeFolderId(req.body.folder_id);
+      }
 
-    // If folder_id changed, move physical file in data directory if applicable
-    if (
-      req.body.folder_id !== undefined &&
-      req.body.folder_id !== existing.folder_id &&
-      dataDir &&
-      existing.file_path &&
-      fs.existsSync(existing.file_path)
-    ) {
-      const resolvedDataDir = path.resolve(dataDir);
-      const currentFilePath = path.resolve(existing.file_path);
-      if (isPathInsideDir(currentFilePath, resolvedDataDir)) {
-        let destDir = resolvedDataDir;
-        if (req.body.folder_id) {
-          const targetFolder = db.getFolders().find((f) => f.id === req.body.folder_id);
-          if (targetFolder) {
-            destDir = path.join(resolvedDataDir, targetFolder.name);
+      // If folder_id changed, move physical file in data directory if applicable
+      if (
+        targetFolderId !== undefined &&
+        targetFolderId !== existing.folder_id &&
+        dataDir &&
+        existing.file_path &&
+        fs.existsSync(existing.file_path)
+      ) {
+        const resolvedDataDir = path.resolve(dataDir);
+        const currentFilePath = path.resolve(existing.file_path);
+        if (isPathInsideDir(currentFilePath, resolvedDataDir)) {
+          let destDir = resolvedDataDir;
+          if (targetFolderId) {
+            const targetFolder = db.getFolderById(targetFolderId);
+            if (targetFolder) {
+              destDir = path.join(resolvedDataDir, targetFolder.name);
+            }
+          }
+          if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+          const newFilePath = path.join(destDir, path.basename(currentFilePath));
+          try {
+            if (currentFilePath !== newFilePath) {
+              fs.renameSync(currentFilePath, newFilePath);
+              updatedFilePath = newFilePath;
+            }
+          } catch (err) {
+            console.error('[VisualMD] Failed to move physical file to new folder directory:', err);
           }
         }
-        if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-        const newFilePath = path.join(destDir, path.basename(currentFilePath));
+      }
+
+      if (req.body.content !== undefined && updatedFilePath && fs.existsSync(updatedFilePath)) {
         try {
-          if (currentFilePath !== newFilePath) {
-            fs.renameSync(currentFilePath, newFilePath);
-            updatedFilePath = newFilePath;
-          }
+          fs.writeFileSync(updatedFilePath, req.body.content, 'utf-8');
         } catch (err) {
-          console.error('[VisualMD] Failed to move physical file to new folder directory:', err);
+          console.error('[VisualMD] Failed to update file in data folder:', err);
         }
       }
-    }
 
-    if (req.body.content !== undefined && updatedFilePath && fs.existsSync(updatedFilePath)) {
-      try {
-        fs.writeFileSync(updatedFilePath, req.body.content, 'utf-8');
-      } catch (err) {
-        console.error('[VisualMD] Failed to update file in data folder:', err);
+      const updates: any = { ...req.body, file_path: updatedFilePath };
+      if (targetFolderId !== undefined) {
+        updates.folder_id = targetFolderId;
       }
-    }
+      const doc = db.updateDocument(String(req.params.id), updates);
 
-    const updates = { ...req.body, file_path: updatedFilePath };
-    const doc = db.updateDocument(String(req.params.id), updates);
+      const isSignificant =
+        req.body.content !== undefined ||
+        req.body.title !== undefined ||
+        req.body.folder_id !== undefined;
 
-    const isSignificant =
-      req.body.content !== undefined ||
-      req.body.title !== undefined ||
-      req.body.folder_id !== undefined;
-
-    if (isSignificant) {
-      if (dataDir && updatedFilePath) {
-        await autoCommitDataChange(dataDir, `Update document "${doc?.title || existing.title}"`, updatedFilePath).catch(() => {});
+      if (isSignificant) {
+        if (dataDir && updatedFilePath) {
+          await autoCommitDataChange(dataDir, `Update document "${doc?.title || existing.title}"`, updatedFilePath).catch(() => {});
+        }
+        broadcastEvent('sync', { type: 'doc_update', id: doc?.id });
       }
-      broadcastEvent('sync', { type: 'doc_update', id: doc?.id });
-    }
 
-    res.json(doc);
+      res.json(doc);
+    } catch (err: any) {
+      console.error('[VisualMD] Failed to update document:', err);
+      res.status(500).json({ error: err.message || 'Failed to update document' });
+    }
   });
 
   app.delete('/api/docs/:id', async (req: Request, res: Response) => {
-    const existing = db.getDocumentById(String(req.params.id));
-    const { filePath } = db.deleteDocument(String(req.params.id));
+    try {
+      const existing = db.getDocumentById(String(req.params.id));
+      const { filePath } = db.deleteDocument(String(req.params.id));
 
-    // Only physically remove if the file resides within the data directory
-    if (filePath && fs.existsSync(filePath)) {
-      const resolvedDataDir = dataDir ? path.resolve(dataDir) : null;
-      const resolvedFilePath = path.resolve(filePath);
-      if (resolvedDataDir && isPathInsideDir(resolvedFilePath, resolvedDataDir)) {
-        try {
-          fs.unlinkSync(resolvedFilePath);
-        } catch (err) {
-          console.error('[VisualMD] Failed to delete file in data directory:', err);
+      // Only physically remove if the file resides within the data directory
+      if (filePath && fs.existsSync(filePath)) {
+        const resolvedDataDir = dataDir ? path.resolve(dataDir) : null;
+        const resolvedFilePath = path.resolve(filePath);
+        if (resolvedDataDir && isPathInsideDir(resolvedFilePath, resolvedDataDir)) {
+          try {
+            fs.unlinkSync(resolvedFilePath);
+          } catch (err) {
+            console.error('[VisualMD] Failed to delete file in data directory:', err);
+          }
+        }
+        if (dataDir) {
+          await autoCommitDataChange(dataDir, `Delete document "${existing?.title || 'doc'}"`, filePath);
         }
       }
-      if (dataDir) {
-        await autoCommitDataChange(dataDir, `Delete document "${existing?.title || 'doc'}"`, filePath);
-      }
-    }
 
-    broadcastEvent('sync', { type: 'doc_delete', id: String(req.params.id) });
-    res.json({ success: true });
+      broadcastEvent('sync', { type: 'doc_delete', id: String(req.params.id) });
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error('[VisualMD] Failed to delete document:', err);
+      res.status(500).json({ error: err.message || 'Failed to delete document' });
+    }
   });
 
   // Bookmarks API
@@ -700,72 +767,86 @@ export function createServer(
 
   // Import raw text or files (saves each into data/ folder)
   app.post('/api/import', async (req: Request, res: Response) => {
-    let rawFiles = req.body.files;
-    let targetFolderId: string | null = req.body.folder_id ? String(req.body.folder_id).trim() : null;
-    if (targetFolderId === '' || targetFolderId === 'null' || targetFolderId === 'undefined') {
-      targetFolderId = null;
-    }
+    try {
+      let rawFiles = req.body.files;
+      let targetFolderId: string | null = db.sanitizeFolderId(req.body.folder_id);
 
-    // Support single file payload: { filename/name, content, folder_id }
-    if (!rawFiles) {
-      if (req.body.filename || req.body.name || req.body.content !== undefined) {
-        rawFiles = [{
-          name: req.body.filename || req.body.name || 'imported.vmd',
-          content: req.body.content || '',
-        }];
-      }
-    }
-
-    if (!Array.isArray(rawFiles) || rawFiles.length === 0) {
-      res.status(400).json({ error: 'Array of files or a file object is required' });
-      return;
-    }
-
-    const imported = [];
-    for (const file of rawFiles) {
-      const content = file.content || '';
-      const parsed = parseVisualMD(content);
-      const fileName = file.name || file.filename || '';
-      const title = (parsed.title && parsed.title !== 'Untitled')
-        ? parsed.title
-        : (fileName ? fileName.replace(/\.(vmd|md|txt)$/i, '') : 'Untitled');
-
-      let targetPath: string | null = null;
-      if (dataDir) {
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-        const safeName = fileName
-          ? path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_')
-          : `${title.toLowerCase().replace(/[^a-z0-9_-]+/gi, '-')}.vmd`;
-        targetPath = path.join(dataDir, safeName);
-        let counter = 1;
-        while (fs.existsSync(targetPath)) {
-          const ext = path.extname(safeName) || '.vmd';
-          const nameWithoutExt = path.basename(safeName, ext);
-          targetPath = path.join(dataDir, `${nameWithoutExt}-${counter}${ext}`);
-          counter++;
+      // Support single file payload: { filename/name, content, folder_id }
+      if (!rawFiles) {
+        if (req.body.filename || req.body.name || req.body.content !== undefined) {
+          rawFiles = [{
+            name: req.body.filename || req.body.name || 'imported.vmd',
+            content: req.body.content || '',
+          }];
         }
+      }
+
+      if (!Array.isArray(rawFiles) || rawFiles.length === 0) {
+        res.status(400).json({ error: 'Array of files or a file object is required' });
+        return;
+      }
+
+      let targetDir = dataDir;
+      if (dataDir && targetFolderId) {
+        const folder = db.getFolderById(targetFolderId);
+        if (folder) {
+          targetDir = path.join(dataDir, folder.name);
+        }
+      }
+      if (targetDir && !fs.existsSync(targetDir)) {
         try {
-          fs.writeFileSync(targetPath, content, 'utf-8');
-        } catch (err) {
-          console.error('[VisualMD] Failed to write imported file to data directory:', err);
-        }
+          fs.mkdirSync(targetDir, { recursive: true });
+        } catch {}
       }
 
-      const doc = db.createDocument(title, content, targetFolderId, targetPath);
-      imported.push(doc);
-    }
+      const imported = [];
+      for (const file of rawFiles) {
+        const content = file.content || '';
+        const parsed = parseVisualMD(content);
+        const fileName = file.name || file.filename || '';
+        const title = (parsed.title && parsed.title !== 'Untitled')
+          ? parsed.title
+          : (fileName ? fileName.replace(/\.(vmd|md|txt)$/i, '') : 'Untitled');
 
-    if (dataDir && imported.length > 0) {
-      await autoCommitDataChange(dataDir, `Import ${imported.length} document(s)`).catch(() => {});
-    }
+        let targetPath: string | null = null;
+        if (targetDir) {
+          const safeName = fileName
+            ? path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_')
+            : `${title.toLowerCase().replace(/[^a-z0-9_-]+/gi, '-')}.vmd`;
+          targetPath = path.join(targetDir, safeName);
+          let counter = 1;
+          while (fs.existsSync(targetPath)) {
+            const ext = path.extname(safeName) || '.vmd';
+            const nameWithoutExt = path.basename(safeName, ext);
+            targetPath = path.join(targetDir, `${nameWithoutExt}-${counter}${ext}`);
+            counter++;
+          }
+          try {
+            fs.writeFileSync(targetPath, content, 'utf-8');
+          } catch (err) {
+            console.error('[VisualMD] Failed to write imported file to data directory:', err);
+          }
+        }
 
-    broadcastEvent('sync', { type: 'import', count: imported.length });
-    res.status(201).json({
-      success: true,
-      count: imported.length,
-      docs: imported,
-      documents: imported,
-    });
+        const doc = db.createDocument(title, content, targetFolderId, targetPath);
+        imported.push(doc);
+      }
+
+      if (dataDir && imported.length > 0) {
+        await autoCommitDataChange(dataDir, `Import ${imported.length} document(s)`).catch(() => {});
+      }
+
+      broadcastEvent('sync', { type: 'import', count: imported.length });
+      res.status(201).json({
+        success: true,
+        count: imported.length,
+        docs: imported,
+        documents: imported,
+      });
+    } catch (err: any) {
+      console.error('[VisualMD] Failed to import documents:', err);
+      res.status(500).json({ error: err.message || 'Failed to import documents' });
+    }
   });
 
   // Validate endpoint
@@ -841,6 +922,14 @@ export function createServer(
       res.status(404).json({ error: 'Route not found' });
     });
   }
+
+  // Global error safety net: catch any uncaught exceptions to ensure Node server never crashes
+  app.use((err: any, _req: Request, res: Response, _next: any) => {
+    console.error('[VisualMD] Unhandled Express error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: err?.message || 'Internal server error' });
+    }
+  });
 
   return app;
 }

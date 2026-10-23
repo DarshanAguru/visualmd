@@ -124,6 +124,14 @@ updateFile('packages/server/tests/server.test.mjs', (content) => {
       `test('Server (v${targetVersion}) - Health Version & Prefix FTS5 Search'`
     )
     .replace(
+      /test\('Server \(v[\d.]+\) - Folder lifecycle, auto-prune immunity, foreign key integrity & crash protection'/g,
+      `test('Server (v${targetVersion}) - Folder lifecycle, auto-prune immunity, foreign key integrity & crash protection'`
+    )
+    .replace(
+      /Discussing v[\d.]+ release\./g,
+      `Discussing v${targetVersion} release.`
+    )
+    .replace(
       /assert\.equal\(health\.version,\s*['"][\d.]+['"]\)/g,
       `assert.equal(health.version, '${targetVersion}')`
     );
@@ -147,6 +155,11 @@ updateFile('README.md', (content) => {
 });
 
 // 5. Update SECURITY.md supported version table
+const releaseHighlights = process.argv.slice(3).join(' ').trim() ||
+  (targetVersion === '1.0.246'
+    ? 'Foreign key constraint resilience, folder auto-prune immunity on creation, Express exception crash protection, folder cascade disassociation'
+    : `Universal version bump to v${targetVersion}`);
+
 updateFile('SECURITY.md', (content) => {
   // Check if targetVersion is already in the table
   if (content.includes(`| **v${targetVersion}** |`)) {
@@ -156,7 +169,7 @@ updateFile('SECURITY.md', (content) => {
   // Update top row or insert current release
   const tableHeader = '| Version | Status | Security Support | Release Notes / Highlights |\n| :--- | :--- | :--- | :--- |\n';
   if (content.includes(tableHeader)) {
-    const newRow = `| **v${targetVersion}** | **Latest (Current)** | :white_check_mark: Actively Supported | Universal version bump to v${targetVersion} |\n`;
+    const newRow = `| **v${targetVersion}** | **Latest (Current)** | :white_check_mark: Actively Supported | ${releaseHighlights} |\n`;
     // Update existing Latest to Previous
     const updatedContent = content
       .replace(/\*\*Latest \(Current\)\*\*/g, 'Previous Release')

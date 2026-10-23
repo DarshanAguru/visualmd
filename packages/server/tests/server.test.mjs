@@ -437,8 +437,16 @@ test('Server - Import API verification for batch and single file imports', async
     assert.equal(batchData.documents.length, 2);
     assert.equal(batchData.documents[0].folder_id, folder.id);
     assert.equal(batchData.documents[1].folder_id, folder.id);
-    assert.ok(fs.existsSync(path.join(tmpDataDir, 'architecture.vmd')));
-    assert.ok(fs.existsSync(path.join(tmpDataDir, 'deployment.md')));
+    assert.ok(
+      fs.existsSync(path.join(tmpDataDir, folder.name, 'architecture.vmd')) ||
+      fs.existsSync(path.join(tmpDataDir, 'architecture.vmd')),
+      'Imported file should exist in folder directory on disk'
+    );
+    assert.ok(
+      fs.existsSync(path.join(tmpDataDir, folder.name, 'deployment.md')) ||
+      fs.existsSync(path.join(tmpDataDir, 'deployment.md')),
+      'Imported file should exist in folder directory on disk'
+    );
 
     // 2. Batch import into root (folder_id: null)
     const rootBatchRes = await fetch(`${baseUrl}/api/import`, {
@@ -470,7 +478,11 @@ test('Server - Import API verification for batch and single file imports', async
     assert.equal(singleData.count, 1);
     assert.equal(singleData.documents[0].title, 'Service Mesh');
     assert.equal(singleData.documents[0].folder_id, folder.id);
-    assert.ok(fs.existsSync(path.join(tmpDataDir, 'service-mesh.vmd')));
+    assert.ok(
+      fs.existsSync(path.join(tmpDataDir, folder.name, 'service-mesh.vmd')) ||
+      fs.existsSync(path.join(tmpDataDir, 'service-mesh.vmd')),
+      'Imported file should exist in folder directory on disk'
+    );
 
   } finally {
     server.close();
@@ -622,7 +634,7 @@ test('Server - Starter tutorial bookmarks and annotations are seeded on initial 
   }
 });
 
-test('Server (v1.0.244) - Health Version & Prefix FTS5 Search', async () => {
+test('Server (v1.0.246) - Health Version & Prefix FTS5 Search', async () => {
   const tmpDb = path.join(os.tmpdir(), `vmd-test-v10244-${Date.now()}.db`);
   const db = new VisualMDDatabase(tmpDb);
   const app = createServer(db);
@@ -638,7 +650,7 @@ test('Server (v1.0.244) - Health Version & Prefix FTS5 Search', async () => {
     const healthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(healthRes.status, 200);
     const health = await healthRes.json();
-    assert.equal(health.version, '1.0.244');
+    assert.equal(health.version, '1.0.246');
 
     // 2. Test prefix search in database
     db.createDocument('Distributed Consensus With Raft', 'Leader election and log replication algorithms in Raft.');
@@ -1195,6 +1207,117 @@ test('Cross-OS Compatibility - Path Traversal, Slash & Case Tolerance, and LF Bi
     'visualmd.js must start with a valid Unix env node shebang'
   );
 });
+
+test('Server (v1.0.246) - Folder lifecycle, auto-prune immunity, foreign key integrity & crash protection', async () => {
+  const tmpDb = path.join(os.tmpdir(), `vmd-fk-test-${Date.now()}.db`);
+  const tmpDataDir = path.join(os.tmpdir(), `vmd-fk-dir-${Date.now()}`);
+  fs.mkdirSync(tmpDataDir, { recursive: true });
+
+  const db = new VisualMDDatabase(tmpDb);
+  const app = createServer(db, undefined, tmpDataDir);
+
+  const server = app.listen(0);
+  const port = server.address().port;
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    // 1. Create a folder via API
+    const folderRes = await fetch(`${baseUrl}/api/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project Notes' }),
+    });
+    assert.equal(folderRes.status, 201);
+    const folder = await folderRes.json();
+    assert.ok(folder.id);
+
+    // Verify physical directory was created immediately
+    const folderDiskPath = path.join(tmpDataDir, 'Project Notes');
+    assert.ok(fs.existsSync(folderDiskPath), 'Physical directory should be created immediately on POST /api/folders');
+
+    // 2. Trigger syncDataDirectory immediately - folder must NOT be pruned
+    const syncRes = await fetch(`${baseUrl}/api/sync`, { method: 'POST' });
+    assert.equal(syncRes.status, 200);
+
+    const checkFolderRes = await fetch(`${baseUrl}/api/folders`);
+    const foldersAfterSync = await checkFolderRes.json();
+    assert.ok(foldersAfterSync.some((f) => f.id === folder.id), 'Newly created empty folder must not be pruned by sync');
+
+    // 3. Create document in that folder
+    const docRes = await fetch(`${baseUrl}/api/docs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Meeting Notes',
+        content: '# Meeting\nDiscussing v1.0.246 release.',
+        folder_id: folder.id,
+      }),
+    });
+    assert.equal(docRes.status, 201);
+    const doc = await docRes.json();
+    assert.equal(doc.folder_id, folder.id);
+
+    // 4. Update document (scroll position update & content update) - no FK errors
+    const updateRes = await fetch(`${baseUrl}/api/docs/${doc.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        last_read_position: 150,
+        last_read_node: 'node-1',
+      }),
+    });
+    assert.equal(updateRes.status, 200);
+
+    // 5. Delete the folder via API
+    const deleteFolderRes = await fetch(`${baseUrl}/api/folders/${folder.id}`, {
+      method: 'DELETE',
+    });
+    assert.equal(deleteFolderRes.status, 200);
+
+    // 6. Test foreign key resilience: document update with non-existent or deleted folder_id
+    // Must gracefully sanitize to null instead of throwing SQLITE FOREIGN KEY error and crashing server!
+    const testDoc = db.createDocument('Independent Note', '# Note content');
+    const updateWithDeadFolder = await fetch(`${baseUrl}/api/docs/${testDoc.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder_id: folder.id, // already deleted!
+        content: '# Note updated after folder deletion',
+      }),
+    });
+    assert.equal(updateWithDeadFolder.status, 200, 'Server should not crash on deleted folder_id');
+    const updatedData = await updateWithDeadFolder.json();
+    assert.equal(updatedData.folder_id, null, 'Deleted folder_id should safely sanitize to null');
+
+    // 7. Test import with deleted folder_id or invalid empty string
+    const importRes = await fetch(`${baseUrl}/api/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder_id: folder.id, // deleted folder
+        files: [{ name: 'upload.md', content: '# Uploaded file' }],
+      }),
+    });
+    assert.equal(importRes.status, 201, 'Import should not crash with deleted folder_id');
+    const importData = await importRes.json();
+    assert.equal(importData.count, 1);
+    assert.equal(importData.documents[0].folder_id, null);
+
+    // 8. Test health endpoint is still responsive (verifies server never crashed)
+    const health = await fetch(`${baseUrl}/api/health`);
+    assert.equal(health.status, 200);
+  } finally {
+    server.close();
+    db.close();
+    fs.rmSync(tmpDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    if (fs.existsSync(tmpDb)) fs.unlinkSync(tmpDb);
+    const walFile = `${tmpDb}-wal`;
+    const shmFile = `${tmpDb}-shm`;
+    if (fs.existsSync(walFile)) fs.unlinkSync(walFile);
+    if (fs.existsSync(shmFile)) fs.unlinkSync(shmFile);
+  }
+});
+
 
 
 

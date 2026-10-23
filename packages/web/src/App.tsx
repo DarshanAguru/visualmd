@@ -25,6 +25,7 @@ export const App: React.FC = () => {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [documents, setDocuments] = useState<DocumentMeta[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [modalTargetFolderId, setModalTargetFolderId] = useState<string | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(() => {
     const pathMatch = window.location.pathname.match(/\/view\/([a-zA-Z0-9_-]+)/);
     return pathMatch ? pathMatch[1] : null;
@@ -548,6 +549,9 @@ export const App: React.FC = () => {
       const remainingDocs = documents.filter((d) => d.folder_id !== id);
       setDocuments(remainingDocs);
       if (selectedFolderId === id) setSelectedFolderId(null);
+      if (currentDoc && currentDoc.folder_id === id) {
+        setCurrentDoc(null);
+      }
       if (selectedDocId && !remainingDocs.some((d) => d.id === selectedDocId)) {
         setSelectedDocId(remainingDocs.length > 0 ? remainingDocs[0].id : null);
       }
@@ -851,11 +855,15 @@ export const App: React.FC = () => {
         onDeleteDoc={handleDeleteDoc}
         onMoveDoc={handleMoveDoc}
         onOpenNewDocModal={(folderId) => {
-          if (folderId !== undefined) setSelectedFolderId(folderId);
+          const target = folderId !== undefined ? folderId : selectedFolderId;
+          setModalTargetFolderId(target || null);
+          if (target) setSelectedFolderId(target);
           setIsNewDocOpen(true);
         }}
         onOpenImportModal={(folderId) => {
-          if (folderId !== undefined) setSelectedFolderId(folderId);
+          const target = folderId !== undefined ? folderId : selectedFolderId;
+          setModalTargetFolderId(target || null);
+          if (target) setSelectedFolderId(target);
           setIsImportOpen(true);
         }}
         onOpenSearchModal={() => setIsSearchOpen(true)}
@@ -1016,9 +1024,12 @@ export const App: React.FC = () => {
       {/* New Document Modal */}
       <NewDocModal
         isOpen={isNewDocOpen}
-        onClose={() => setIsNewDocOpen(false)}
+        onClose={() => {
+          setIsNewDocOpen(false);
+          setModalTargetFolderId(null);
+        }}
         folders={folders}
-        currentFolderId={selectedFolderId}
+        currentFolderId={modalTargetFolderId ?? selectedFolderId}
         onCreated={(id) => {
           loadWorkspace();
           setSelectedDocId(id);
@@ -1028,9 +1039,12 @@ export const App: React.FC = () => {
       {/* Batch Import Modal */}
       <ImportModal
         isOpen={isImportOpen}
-        onClose={() => setIsImportOpen(false)}
+        onClose={() => {
+          setIsImportOpen(false);
+          setModalTargetFolderId(null);
+        }}
         folders={folders}
-        currentFolderId={selectedFolderId}
+        currentFolderId={modalTargetFolderId ?? selectedFolderId}
         onImportComplete={loadWorkspace}
       />
 

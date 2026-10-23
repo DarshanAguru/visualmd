@@ -139,27 +139,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [isResizing, sidebarWidth]);
 
-  // VS Code-style folder expanded/collapsed state (all expanded by default)
+  // Active opened document's parent folder ID
+  const activeParentFolderId = React.useMemo(() => {
+    if (!selectedDocId) return null;
+    const doc = documents.find((d) => d.id === selectedDocId);
+    return doc?.folder_id || null;
+  }, [selectedDocId, documents]);
+
+  // VS Code-style folder expanded/collapsed state:
+  // Folders are collapsed by default EXCEPT the opened doc's parent folder
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     folders.forEach((f) => {
-      initial[f.id] = true;
+      initial[f.id] = activeParentFolderId === f.id;
     });
     return initial;
   });
 
-  // When folders change or new folder is added, ensure it's expanded
+  // When active opened document changes, ensure its parent folder is expanded
+  useEffect(() => {
+    if (activeParentFolderId) {
+      setExpandedFolders((prev) => {
+        if (prev[activeParentFolderId]) return prev;
+        return {
+          ...prev,
+          [activeParentFolderId]: true,
+        };
+      });
+    }
+  }, [activeParentFolderId]);
+
+  // When folders change or new folder is added, retain state without forcing all to true
   useEffect(() => {
     setExpandedFolders((prev) => {
       const next = { ...prev };
+      let changed = false;
       folders.forEach((f) => {
         if (next[f.id] === undefined) {
-          next[f.id] = true;
+          next[f.id] = activeParentFolderId === f.id;
+          changed = true;
         }
       });
-      return next;
+      return changed ? next : prev;
     });
-  }, [folders]);
+  }, [folders, activeParentFolderId]);
 
   // When filtering with search text, auto-expand folders containing matches
   useEffect(() => {
@@ -474,6 +497,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      setExpandedFolders((prev) => ({ ...prev, [folder.id]: true }));
+                      onSelectFolder(folder.id);
                       onOpenNewDocModal(folder.id);
                     }}
                     className="p-0.5 hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-tertiary)]"
@@ -484,6 +509,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      setExpandedFolders((prev) => ({ ...prev, [folder.id]: true }));
+                      onSelectFolder(folder.id);
                       onOpenImportModal(folder.id);
                     }}
                     className="p-0.5 hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-tertiary)]"

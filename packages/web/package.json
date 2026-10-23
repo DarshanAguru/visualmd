@@ -1,6 +1,6 @@
 {
   "name": "@visualmd/web",
-  "version": "1.0.244",
+  "version": "1.0.246",
   "private": true,
   "type": "module",
   "scripts": {

@@ -81,13 +81,14 @@ export const NewDocModal: React.FC<NewDocModalProps> = ({
 
   React.useEffect(() => {
     if (isOpen) {
-      setFolderId(currentFolderId || null);
+      const validFolder = folders.find((f) => f.id === currentFolderId);
+      setFolderId(validFolder ? validFolder.id : null);
       setTitle('');
       setContent(DEFAULT_BLANK_CONTENT);
       setValidationResult({ checked: false, isValid: false, errors: [] });
       setShowSyntaxGuide(false);
     }
-  }, [isOpen, currentFolderId]);
+  }, [isOpen, currentFolderId, folders]);
 
   if (!isOpen) return null;
 
