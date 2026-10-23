@@ -156,7 +156,9 @@ updateFile('README.md', (content) => {
 
 // 5. Update SECURITY.md supported version table
 const releaseHighlights = process.argv.slice(3).join(' ').trim() ||
-  (targetVersion === '1.0.246'
+  (targetVersion === '1.0.248'
+    ? 'In-app native PDF viewer & interactive image viewer, virtual folder companion assets grouping (1-level depth with nested subfolder immunity), direct asset deletion API, and multi-resource Markdown workflow'
+    : targetVersion === '1.0.246'
     ? 'Foreign key constraint resilience, folder auto-prune immunity on creation, Express exception crash protection, folder cascade disassociation'
     : `Universal version bump to v${targetVersion}`);
 

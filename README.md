@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: >=22](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
-[![Version: v1.0.246](https://img.shields.io/badge/Version-v1.0.246-purple.svg)](SECURITY)
+[![Version: v1.0.248](https://img.shields.io/badge/Version-v1.0.248-purple.svg)](SECURITY)
 ---
 
 ## ⚡ Why VisualMD?
@@ -21,7 +21,7 @@ However, existing workflows suffer from the **UI Token Waste Paradox**:
 4. **Rich Palettes & Dynamic Typography**: 11 hand-crafted visual themes (7 Dark & Cyber modes including Obsidian, Tokyo Night, Dracula, and CRT Terminal; 4 Light & Paper modes including Ruled Notebook and Literary Sepia) with real-time 7-level font scaling (80% to 175%).
 5. **Built-In Version Control System (Snapshot VCS)**: Automatic snapshot tracking across revisions with timeline diffing, named checkpoints before asking LLMs to rewrite documents, and 1-click rollback without terminal or git requirements.
 6. **Hardened Security & Node.js VM Sandboxing**: Complete elimination of shell injection RCE vectors, custom isolated Node.js VM container with code generation disabled, client-side XSS sanitization, and zero-privilege canvas iframes.
-7. **Companion Asset Tolerance & Image Serving**: Automatically serves local companion assets (`.png`, `.svg`, `.pdf`, `.csv`), rewrites relative links with smart subfolder fallback, and provides a sidebar Resources Drawer with 1-click markdown tag copying.
+7. **Encapsulated Companion Assets, In-App PDF & Image Viewers**: Upload supporting images (`.png`, `.jpg`, `.jpeg`, `.svg`, `.webp`, `.avif`) and documents (`.pdf`) alongside markdown notes. Assets targeting a folder are automatically organized into an encapsulated `assets/` subfolder on disk (e.g., `Topic/assets/slides.pdf`), keeping all learning and reference materials cleanly isolated and grouped together. Read PDFs with native toolbar search and inspect diagrams with interactive zoom controls directly in the main workspace.
 
 ---
 
@@ -250,7 +250,7 @@ visualmd/
 ├── CONTRIBUTING.md                    # Contribution guidelines & developer setup
 ├── SECURITY.md                        # Enterprise security policy & sandbox guarantees
 ├── README.md                          # Main project documentation
-├── package.json                       # Monorepo configuration (version 1.0.246)
+├── package.json                       # Monorepo configuration (version 1.0.248)
 ├── prompts/                           # Centralized AI skills, prompts & specifications
 │   ├── skill.md                       # Agent skill for Antigravity, Claude, Cursor
 │   ├── VisualMDStandard.md            # Complete VisualMD standard specification
@@ -264,10 +264,11 @@ visualmd/
 │   ├── server/                        # Local SQLite, CLI Daemon & Sandbox Container
 │   │   ├── src/                       # DatabaseSync, Express REST API, CLI, Sandbox, Git
 │   │   ├── bin/visualmd.js            # Executable CLI launcher
-│   │   └── tests/                     # 12 Integration & Security tests
+│   │   └── tests/                     # 16 Integration & Security tests
 │   └── web/                           # React 19 + Vite Workspace UI
 │       ├── src/components/widgets/    # CodeBox, Stepper, CanvasSandbox, Tabs, Quiz
 │       ├── src/components/sidebar/    # Virtual folders, search, assets drawer, file tree
+│       ├── src/components/viewer/     # In-App PDF & Image AssetViewer
 │       ├── src/components/deck/       # Fullscreen slide presentation mode
 │       ├── src/components/modals/     # HistoryDrawer, PromptsModal, SearchModal, ImportModal
 │       └── src/components/document/   # Document viewer & annotations
@@ -289,8 +290,8 @@ npm test
 
 ```
 ✔ VisualMD Compiler (16 tests) - 100% pass
-✔ VisualMD Server & Security (12 tests) - 100% pass
-Total: 28 tests, 28 passing, 0 failing
+✔ VisualMD Server & Security (16 tests) - 100% pass
+Total: 32 tests, 32 passing, 0 failing
 ```
 
 ---

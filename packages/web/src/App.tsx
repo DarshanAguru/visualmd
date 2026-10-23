@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Folder, DocumentMeta, FullDocument, ThemeType } from './types';
+import { Folder, DocumentMeta, FullDocument, ThemeType, WorkspaceAsset } from './types';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { DocumentViewer } from './components/document/DocumentViewer';
+import { AssetViewer } from './components/viewer/AssetViewer';
 import { AnnotationToolbar } from './components/annotations/AnnotationToolbar';
 import { NotesDrawer } from './components/annotations/NotesDrawer';
 import { PresentationDeck } from './components/deck/PresentationDeck';
@@ -30,6 +31,9 @@ export const App: React.FC = () => {
     const pathMatch = window.location.pathname.match(/\/view\/([a-zA-Z0-9_-]+)/);
     return pathMatch ? pathMatch[1] : null;
   });
+  const [selectedAsset, setSelectedAsset] = useState<WorkspaceAsset | null>(null);
+  const selectedAssetRef = React.useRef<WorkspaceAsset | null>(null);
+  selectedAssetRef.current = selectedAsset;
   const [currentDoc, setCurrentDoc] = useState<FullDocument | null>(null);
   const [docReloadTrigger, setDocReloadTrigger] = useState(0);
   const currentDocRef = React.useRef<FullDocument | null>(null);
@@ -198,6 +202,10 @@ export const App: React.FC = () => {
           }
           if (urlDocId && docsData.some((d) => d.id === urlDocId)) {
             return urlDocId;
+          }
+          // Preserve open asset preview if user is inspecting an image or PDF
+          if (selectedAssetRef.current) {
+            return null;
           }
           return docsData.length > 0 ? docsData[0].id : null;
         });
@@ -823,6 +831,22 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleDeleteAsset = async (asset: WorkspaceAsset) => {
+    if (!confirm(`Delete asset "${asset.name}"?`)) return;
+    try {
+      const res = await fetch(`/api/assets/${encodeURI(asset.relativePath)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        selectedAssetRef.current = null;
+        setSelectedAsset(null);
+        await loadWorkspace();
+      }
+    } catch (err) {
+      console.error('Failed to delete asset:', err);
+    }
+  };
+
   if (initialLoading) {
     return (
       <div className="flex items-center justify-center h-screen vmd-app gap-3">
@@ -842,11 +866,30 @@ export const App: React.FC = () => {
         documents={documents}
         selectedFolderId={selectedFolderId}
         selectedDocId={selectedDocId}
+        selectedAsset={selectedAsset}
         onSelectFolder={setSelectedFolderId}
         onSelectDoc={(id) => {
           setSelectedDocId(id);
+          setSelectedAsset(null);
           if (window.location.pathname !== `/view/${id}`) {
             window.history.pushState(null, '', `/view/${id}`);
+          }
+        }}
+        onSelectAsset={(asset) => {
+          setSelectedAsset(asset);
+          if (asset) {
+            setSelectedDocId(null);
+            setCurrentDoc(null);
+            if (window.location.pathname.startsWith('/view/')) {
+              window.history.pushState(null, '', '/');
+            }
+          } else {
+            selectedAssetRef.current = null;
+            const fallbackDoc = documents.length > 0 ? documents[0] : null;
+            if (fallbackDoc) {
+              setSelectedDocId(fallbackDoc.id);
+              window.history.pushState(null, '', `/view/${fallbackDoc.id}`);
+            }
           }
         }}
         onCreateFolder={handleCreateFolder}
@@ -875,7 +918,7 @@ export const App: React.FC = () => {
         }}
       />
 
-      {/* Main Document Workspace or Initial Parser Loader */}
+      {/* Main Document Workspace or In-App Asset Viewer or Initial Parser Loader */}
       {!currentDoc && isDocumentLoading ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8 gap-3 bg-[var(--bg-primary)]">
           <div className="w-8 h-8 rounded-full border-2 border-[var(--border-color)] border-t-blue-500 animate-spin" />
@@ -884,6 +927,22 @@ export const App: React.FC = () => {
             <p className="text-xs text-[var(--text-muted)] mt-0.5">Compiling VisualMD AST & reactive blocks...</p>
           </div>
         </div>
+      ) : selectedAsset ? (
+        <AssetViewer
+          asset={selectedAsset}
+          onClose={() => {
+            selectedAssetRef.current = null;
+            setSelectedAsset(null);
+            const fallbackDoc = documents.length > 0 ? documents[0] : null;
+            if (fallbackDoc) {
+              setSelectedDocId(fallbackDoc.id);
+              window.history.pushState(null, '', `/view/${fallbackDoc.id}`);
+            }
+          }}
+          onDelete={handleDeleteAsset}
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+        />
       ) : docNotFound ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[var(--bg-primary)] animate-in fade-in duration-200">
           <div className="relative mb-5">
@@ -902,6 +961,7 @@ export const App: React.FC = () => {
             <button
               onClick={() => {
                 setDocNotFound(false);
+                setSelectedAsset(null);
                 const firstDoc = documents.length > 0 ? documents[0] : null;
                 if (firstDoc) {
                   setSelectedDocId(firstDoc.id);
@@ -1018,6 +1078,7 @@ export const App: React.FC = () => {
         onClose={() => setIsSearchOpen(false)}
         onSelectDoc={(id) => {
           setSelectedDocId(id);
+          setSelectedAsset(null);
         }}
       />
 
@@ -1033,6 +1094,7 @@ export const App: React.FC = () => {
         onCreated={(id) => {
           loadWorkspace();
           setSelectedDocId(id);
+          setSelectedAsset(null);
         }}
       />
 
@@ -1063,14 +1125,15 @@ export const App: React.FC = () => {
           const demoDoc =
             documents.find(
               (d) =>
-                d.filename.toLowerCase().includes('welcome') ||
-                d.filename.toLowerCase().includes('tutorial') ||
-                d.filename.toLowerCase().includes('guide') ||
-                d.filename.toLowerCase().includes('study') ||
-                d.filename.toLowerCase().includes('demo')
+                d.title.toLowerCase().includes('welcome') ||
+                d.title.toLowerCase().includes('tutorial') ||
+                d.title.toLowerCase().includes('guide') ||
+                d.title.toLowerCase().includes('study') ||
+                d.title.toLowerCase().includes('demo')
             ) || documents[0];
           if (demoDoc) {
             setSelectedDocId(demoDoc.id);
+            setSelectedAsset(null);
           }
         }}
       />

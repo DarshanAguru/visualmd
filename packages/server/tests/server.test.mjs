@@ -634,7 +634,7 @@ test('Server - Starter tutorial bookmarks and annotations are seeded on initial 
   }
 });
 
-test('Server (v1.0.246) - Health Version & Prefix FTS5 Search', async () => {
+test('Server (v1.0.248) - Health Version & Prefix FTS5 Search', async () => {
   const tmpDb = path.join(os.tmpdir(), `vmd-test-v10244-${Date.now()}.db`);
   const db = new VisualMDDatabase(tmpDb);
   const app = createServer(db);
@@ -650,7 +650,7 @@ test('Server (v1.0.246) - Health Version & Prefix FTS5 Search', async () => {
     const healthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(healthRes.status, 200);
     const health = await healthRes.json();
-    assert.equal(health.version, '1.0.246');
+    assert.equal(health.version, '1.0.248');
 
     // 2. Test prefix search in database
     db.createDocument('Distributed Consensus With Raft', 'Leader election and log replication algorithms in Raft.');
@@ -1208,7 +1208,7 @@ test('Cross-OS Compatibility - Path Traversal, Slash & Case Tolerance, and LF Bi
   );
 });
 
-test('Server (v1.0.246) - Folder lifecycle, auto-prune immunity, foreign key integrity & crash protection', async () => {
+test('Server (v1.0.248) - Folder lifecycle, auto-prune immunity, foreign key integrity & crash protection', async () => {
   const tmpDb = path.join(os.tmpdir(), `vmd-fk-test-${Date.now()}.db`);
   const tmpDataDir = path.join(os.tmpdir(), `vmd-fk-dir-${Date.now()}`);
   fs.mkdirSync(tmpDataDir, { recursive: true });
@@ -1249,7 +1249,7 @@ test('Server (v1.0.246) - Folder lifecycle, auto-prune immunity, foreign key int
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: 'Meeting Notes',
-        content: '# Meeting\nDiscussing v1.0.246 release.',
+        content: '# Meeting\nDiscussing v1.0.248 release.',
         folder_id: folder.id,
       }),
     });
@@ -1317,6 +1317,133 @@ test('Server (v1.0.246) - Folder lifecycle, auto-prune immunity, foreign key int
     if (fs.existsSync(shmFile)) fs.unlinkSync(shmFile);
   }
 });
+
+test('Server - Encapsulated Folder Assets (Image & PDF Upload, Folder Assets Isolation, and PDF Serving)', async () => {
+  const tmpDb = path.join(os.tmpdir(), `vmd-folder-asset-test-${Date.now()}.db`);
+  const tmpDataDir = path.join(os.tmpdir(), `vmd-folder-asset-data-${Date.now()}`);
+  fs.mkdirSync(tmpDataDir, { recursive: true });
+
+  const db = new VisualMDDatabase(tmpDb);
+  const app = createServer(db, undefined, tmpDataDir);
+
+  const server = app.listen(0);
+  const port = server.address().port;
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    // 1. Create a folder named "Biology 101"
+    const folderRes = await fetch(`${baseUrl}/api/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Biology 101' }),
+    });
+    assert.equal(folderRes.status, 201);
+    const folder = await folderRes.json();
+
+    // 2. Upload supporting docs: a markdown file, a PNG image, and a PDF file targeting this folder
+    const fakePdfBytes = Buffer.from('%PDF-1.4 Fake PDF Content EOF', 'utf-8');
+    const fakePdfBase64 = fakePdfBytes.toString('base64');
+    const fakePngBytes = Buffer.from('fake-png-binary-bytes', 'utf-8');
+    const fakePngBase64 = fakePngBytes.toString('base64');
+
+    const importRes = await fetch(`${baseUrl}/api/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder_id: folder.id,
+        files: [
+          { name: 'CellStructure.md', content: '# Cell Structure\nDetailed biology notes' },
+          { name: 'diagram.png', content: fakePngBase64, encoding: 'base64', isAsset: true },
+          { name: 'syllabus.pdf', content: fakePdfBase64, encoding: 'base64', isAsset: true },
+        ],
+      }),
+    });
+    assert.equal(importRes.status, 201);
+    const importData = await importRes.json();
+    assert.equal(importData.count, 3, 'Imported 1 doc + 2 companion assets');
+
+    // 3. Verify on disk that assets reside directly in the folder (1 level deep, no separate physical assets/ subfolder)
+    const expectedDocPath = path.join(tmpDataDir, 'Biology 101', 'CellStructure.md');
+    const expectedImagePath = path.join(tmpDataDir, 'Biology 101', 'diagram.png');
+    const expectedPdfPath = path.join(tmpDataDir, 'Biology 101', 'syllabus.pdf');
+
+    assert.ok(fs.existsSync(expectedDocPath), 'Markdown document should reside in folder');
+    assert.ok(fs.existsSync(expectedImagePath), 'Image should reside directly in folder without subfolder');
+    assert.ok(fs.existsSync(expectedPdfPath), 'PDF should reside directly in folder without subfolder');
+    assert.ok(!fs.existsSync(path.join(tmpDataDir, 'Biology 101', 'assets')), 'No physical assets subfolder should be created');
+
+    // Add a deeper nested folder to verify it is completely ignored
+    const nestedDir = path.join(tmpDataDir, 'Biology 101', 'sublevel', 'deep');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    fs.writeFileSync(path.join(nestedDir, 'ignored.png'), 'ignored-binary-content', 'utf-8');
+
+    // Binary file integrity check
+    const savedPdf = fs.readFileSync(expectedPdfPath);
+    assert.deepEqual(savedPdf, fakePdfBytes, 'PDF binary content preserved without corrupt encoding');
+
+    // 4. Asset discovery API: GET /api/assets should return both assets (1 level deep) and ignore deeper nested folders
+    const assetsRes = await fetch(`${baseUrl}/api/assets`);
+    assert.equal(assetsRes.status, 200);
+    const assets = await assetsRes.json();
+
+    const ignoredAsset = assets.find((a) => a.name === 'ignored.png');
+    assert.equal(ignoredAsset, undefined, 'Deeper nested folders must be ignored');
+
+    const pdfAsset = assets.find((a) => a.name === 'syllabus.pdf');
+    assert.ok(pdfAsset, 'syllabus.pdf should be present in assets list');
+    assert.equal(pdfAsset.isPdf, true);
+    assert.equal(pdfAsset.isImage, false);
+    assert.equal(pdfAsset.folderId, folder.id);
+    assert.equal(pdfAsset.folderName, 'Biology 101');
+    assert.equal(pdfAsset.relativePath, 'Biology 101/syllabus.pdf');
+
+    const imgAsset = assets.find((a) => a.name === 'diagram.png');
+    assert.ok(imgAsset, 'diagram.png should be present in assets list');
+    assert.equal(imgAsset.isImage, true);
+    assert.equal(imgAsset.isPdf, false);
+    assert.equal(imgAsset.folderId, folder.id);
+    assert.equal(imgAsset.folderName, 'Biology 101');
+    assert.equal(imgAsset.relativePath, 'Biology 101/diagram.png');
+
+    // 5. Serving PDF via /api/assets
+    const servePdfRes = await fetch(`${baseUrl}/api/assets/${encodeURI(pdfAsset.relativePath)}`);
+    assert.equal(servePdfRes.status, 200);
+    assert.ok(
+      servePdfRes.headers.get('content-type')?.includes('application/pdf'),
+      'Content-type should be application/pdf'
+    );
+    const servedPdfBytes = Buffer.from(await servePdfRes.arrayBuffer());
+    assert.deepEqual(servedPdfBytes, fakePdfBytes);
+
+    // 6. Running syncDataDirectory should NOT conflict, delete or crash
+    const syncRes = await fetch(`${baseUrl}/api/sync`, { method: 'POST' });
+    assert.equal(syncRes.status, 200);
+    const docsRes = await fetch(`${baseUrl}/api/docs`);
+    const docs = await docsRes.json();
+    assert.equal(docs.length, 1);
+    assert.equal(docs[0].folder_id, folder.id);
+
+    // 7. Delete asset API: DELETE /api/assets/:path
+    const delAssetRes = await fetch(`${baseUrl}/api/assets/${encodeURI(imgAsset.relativePath)}`, {
+      method: 'DELETE',
+    });
+    assert.equal(delAssetRes.status, 200);
+    assert.ok(!fs.existsSync(expectedImagePath), 'Asset file should be removed from disk');
+
+    const assetsAfterDelete = await (await fetch(`${baseUrl}/api/assets`)).json();
+    assert.equal(assetsAfterDelete.find((a) => a.name === 'diagram.png'), undefined);
+  } finally {
+    server.close();
+    db.close();
+    fs.rmSync(tmpDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    if (fs.existsSync(tmpDb)) fs.unlinkSync(tmpDb);
+    const walFile = `${tmpDb}-wal`;
+    const shmFile = `${tmpDb}-shm`;
+    if (fs.existsSync(walFile)) fs.unlinkSync(walFile);
+    if (fs.existsSync(shmFile)) fs.unlinkSync(shmFile);
+  }
+});
+
 
 
 

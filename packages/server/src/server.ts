@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { VisualMDDatabase } from './db.js';
+import { VisualMDDatabase, isCompatibleDocFile } from './db.js';
 import { parseVisualMD, validateVisualMD } from '../../compiler/dist/index.js';
 import { autoCommitDataChange } from './git.js';
 import { executeSandboxedCode } from './sandbox.js';
@@ -64,8 +64,8 @@ export function createServer(
       credentials: true,
     })
   );
-  app.use(express.json({ limit: '20mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   if (dataDir && !fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -111,44 +111,142 @@ export function createServer(
     });
   });
 
-  // Assets API: List all companion resources (images, PDFs, datasets, etc.) in data directory
+  // Assets API: List all companion resources (images, PDFs, datasets, etc.) in data directory (1 level deep)
   app.get('/api/assets', (_req: Request, res: Response) => {
     if (!dataDir || !fs.existsSync(dataDir)) {
       res.json([]);
       return;
     }
     const resolvedDataDir = path.resolve(dataDir);
-    const assets: Array<{ name: string; relativePath: string; size: number; ext: string; isImage: boolean }> = [];
+    const allFolders = db.getFolders();
+    const assets: Array<{
+      name: string;
+      relativePath: string;
+      size: number;
+      ext: string;
+      isImage: boolean;
+      isPdf: boolean;
+      folderId: string | null;
+      folderName: string | null;
+    }> = [];
 
-    const scanDir = (dir: string, rel: string = '') => {
-      try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.name.startsWith('.')) continue;
-          const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isFile()) {
-            const ext = path.extname(entry.name).toLowerCase();
-            // Exclude markdown documents
-            if (!['.vmd', '.md', '.markdown', '.mdown', '.mkd', '.mkdn'].includes(ext)) {
-              const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico', '.avif'].includes(ext);
-              const stats = fs.statSync(fullPath);
-              assets.push({
-                name: entry.name,
-                relativePath: entryRel.replace(/\\/g, '/'),
-                size: stats.size,
-                ext,
-                isImage,
-              });
-            }
-          } else if (entry.isDirectory()) {
-            scanDir(fullPath, entryRel);
-          }
-        }
-      } catch {}
+    const isAssetExt = (ext: string) => {
+      return !['.vmd', '.md', '.markdown', '.mdown', '.mkd', '.mkdn'].includes(ext);
     };
 
-    scanDir(resolvedDataDir);
+    try {
+      const rootEntries = fs.readdirSync(resolvedDataDir, { withFileTypes: true });
+
+      // 1. Files directly in dataDir (root level, 1 level deep)
+      for (const entry of rootEntries) {
+        if (entry.name.startsWith('.')) continue;
+        const fullPath = path.join(resolvedDataDir, entry.name);
+
+        if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (isAssetExt(ext)) {
+            const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico', '.avif'].includes(ext);
+            const isPdf = ext === '.pdf';
+            const stats = fs.statSync(fullPath);
+            assets.push({
+              name: entry.name,
+              relativePath: entry.name,
+              size: stats.size,
+              ext,
+              isImage,
+              isPdf,
+              folderId: null,
+              folderName: null,
+            });
+          }
+        } else if (entry.isDirectory()) {
+          const dirName = entry.name;
+          const folderDir = path.join(resolvedDataDir, dirName);
+
+          // If legacy assets/ folder at root
+          if (dirName.toLowerCase() === 'assets') {
+            try {
+              const subItems = fs.readdirSync(folderDir, { withFileTypes: true });
+              for (const sub of subItems) {
+                if (sub.name.startsWith('.') || !sub.isFile()) continue;
+                const ext = path.extname(sub.name).toLowerCase();
+                if (isAssetExt(ext)) {
+                  const stats = fs.statSync(path.join(folderDir, sub.name));
+                  assets.push({
+                    name: sub.name,
+                    relativePath: `assets/${sub.name}`,
+                    size: stats.size,
+                    ext,
+                    isImage: ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico', '.avif'].includes(ext),
+                    isPdf: ext === '.pdf',
+                    folderId: null,
+                    folderName: null,
+                  });
+                }
+              }
+            } catch {}
+            continue;
+          }
+
+          // Match created virtual folder
+          const matchedFolder = allFolders.find((f) => f.name.toLowerCase() === dirName.toLowerCase());
+          const folderId = matchedFolder ? matchedFolder.id : null;
+          const folderName = matchedFolder ? matchedFolder.name : dirName;
+
+          // 2. Scan directly inside the folder (only 1 level deep, nested subdirectories ignored)
+          try {
+            const folderEntries = fs.readdirSync(folderDir, { withFileTypes: true });
+            for (const item of folderEntries) {
+              if (item.name.startsWith('.')) continue;
+              const itemPath = path.join(folderDir, item.name);
+
+              if (item.isFile()) {
+                const ext = path.extname(item.name).toLowerCase();
+                if (isAssetExt(ext)) {
+                  const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico', '.avif'].includes(ext);
+                  const isPdf = ext === '.pdf';
+                  const stats = fs.statSync(itemPath);
+                  assets.push({
+                    name: item.name,
+                    relativePath: `${dirName}/${item.name}`,
+                    size: stats.size,
+                    ext,
+                    isImage,
+                    isPdf,
+                    folderId,
+                    folderName,
+                  });
+                }
+              } else if (item.isDirectory() && item.name.toLowerCase() === 'assets') {
+                // If a legacy assets/ subfolder exists inside this folder, include its direct files
+                try {
+                  const legacyItems = fs.readdirSync(itemPath, { withFileTypes: true });
+                  for (const legacy of legacyItems) {
+                    if (legacy.name.startsWith('.') || !legacy.isFile()) continue;
+                    const ext = path.extname(legacy.name).toLowerCase();
+                    if (isAssetExt(ext)) {
+                      const stats = fs.statSync(path.join(itemPath, legacy.name));
+                      assets.push({
+                        name: legacy.name,
+                        relativePath: `${dirName}/assets/${legacy.name}`,
+                        size: stats.size,
+                        ext,
+                        isImage: ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico', '.avif'].includes(ext),
+                        isPdf: ext === '.pdf',
+                        folderId,
+                        folderName,
+                      });
+                    }
+                  }
+                } catch {}
+              }
+              // Notice: Any deeper nested subdirectories are ignored!
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+
     res.json(assets);
   });
 
@@ -203,6 +301,41 @@ export function createServer(
     }
 
     res.status(404).json({ error: `Asset '${rawPath}' not found in workspace` });
+  });
+
+  // Delete companion asset file (image, PDF, etc.)
+  app.delete('/api/assets/*', async (req: Request, res: Response) => {
+    try {
+      if (!dataDir) {
+        res.status(404).json({ error: 'No data directory configured' });
+        return;
+      }
+
+      const resolvedDataDir = path.resolve(dataDir);
+      const rawPath = req.params[0] ? decodeURIComponent(req.params[0]) : '';
+      if (!rawPath) {
+        res.status(400).json({ error: 'Asset path is required' });
+        return;
+      }
+
+      const targetPath = path.resolve(resolvedDataDir, rawPath);
+      if (!isPathInsideDir(targetPath, resolvedDataDir)) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+
+      if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
+        fs.unlinkSync(targetPath);
+        await autoCommitDataChange(dataDir, `Delete asset "${path.basename(targetPath)}"`, targetPath).catch(() => {});
+        broadcastEvent('sync', { type: 'asset_delete', path: rawPath });
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: 'Asset file not found' });
+      }
+    } catch (err: any) {
+      console.error('[VisualMD] Failed to delete asset:', err);
+      res.status(500).json({ error: err.message || 'Failed to delete asset' });
+    }
   });
 
   // Prompts and Skills API
@@ -799,49 +932,110 @@ export function createServer(
         } catch {}
       }
 
-      const imported = [];
-      for (const file of rawFiles) {
-        const content = file.content || '';
-        const parsed = parseVisualMD(content);
-        const fileName = file.name || file.filename || '';
-        const title = (parsed.title && parsed.title !== 'Untitled')
-          ? parsed.title
-          : (fileName ? fileName.replace(/\.(vmd|md|txt)$/i, '') : 'Untitled');
+      const importedDocs = [];
+      const importedAssets = [];
 
-        let targetPath: string | null = null;
-        if (targetDir) {
-          const safeName = fileName
-            ? path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_')
-            : `${title.toLowerCase().replace(/[^a-z0-9_-]+/gi, '-')}.vmd`;
-          targetPath = path.join(targetDir, safeName);
-          let counter = 1;
-          while (fs.existsSync(targetPath)) {
-            const ext = path.extname(safeName) || '.vmd';
-            const nameWithoutExt = path.basename(safeName, ext);
-            targetPath = path.join(targetDir, `${nameWithoutExt}-${counter}${ext}`);
-            counter++;
+      for (const file of rawFiles) {
+        const fileName = file.name || file.filename || 'file';
+        const isDoc = isCompatibleDocFile(fileName);
+
+        if (isDoc) {
+          const content = typeof file.content === 'string' ? file.content : '';
+          const parsed = parseVisualMD(content);
+          const title = (parsed.title && parsed.title !== 'Untitled')
+            ? parsed.title
+            : (fileName ? fileName.replace(/\.(vmd|md|txt)$/i, '') : 'Untitled');
+
+          let targetPath: string | null = null;
+          if (targetDir) {
+            const safeName = fileName
+              ? path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_')
+              : `${title.toLowerCase().replace(/[^a-z0-9_-]+/gi, '-')}.vmd`;
+            targetPath = path.join(targetDir, safeName);
+            let counter = 1;
+            while (fs.existsSync(targetPath)) {
+              const ext = path.extname(safeName) || '.vmd';
+              const nameWithoutExt = path.basename(safeName, ext);
+              targetPath = path.join(targetDir, `${nameWithoutExt}-${counter}${ext}`);
+              counter++;
+            }
+            try {
+              fs.writeFileSync(targetPath, content, 'utf-8');
+            } catch (err) {
+              console.error('[VisualMD] Failed to write imported file to data directory:', err);
+            }
           }
-          try {
-            fs.writeFileSync(targetPath, content, 'utf-8');
-          } catch (err) {
-            console.error('[VisualMD] Failed to write imported file to data directory:', err);
+
+          const doc = db.createDocument(title, content, targetFolderId, targetPath);
+          importedDocs.push(doc);
+        } else {
+          // Supporting companion asset (Image, PDF, etc.)
+          // Stored directly in the target folder (or root data directory) - 1 level deep, no separate physical subfolder
+          if (dataDir) {
+            const destDir = targetDir || dataDir;
+            if (!fs.existsSync(destDir)) {
+              try {
+                fs.mkdirSync(destDir, { recursive: true });
+              } catch (err) {
+                console.error('[VisualMD] Failed to create destination directory:', err);
+              }
+            }
+
+            const rawExt = path.extname(fileName) || '';
+            const safeName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
+            let targetPath = path.join(destDir, safeName);
+            let counter = 1;
+            while (fs.existsSync(targetPath)) {
+              const ext = path.extname(safeName) || rawExt;
+              const nameWithoutExt = path.basename(safeName, ext);
+              targetPath = path.join(destDir, `${nameWithoutExt}-${counter}${ext}`);
+              counter++;
+            }
+
+            try {
+              const isBinary = file.encoding === 'base64' || file.isAsset || rawExt.toLowerCase() === '.pdf' || ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp', '.ico'].includes(rawExt.toLowerCase());
+              if (isBinary && typeof file.content === 'string') {
+                const buffer = Buffer.from(file.content, 'base64');
+                fs.writeFileSync(targetPath, buffer);
+              } else {
+                fs.writeFileSync(targetPath, file.content || '', 'utf-8');
+              }
+
+              const resolvedDataDir = path.resolve(dataDir);
+              const relativePath = path.relative(resolvedDataDir, targetPath).replace(/\\/g, '/');
+              const stats = fs.statSync(targetPath);
+              importedAssets.push({
+                name: path.basename(targetPath),
+                relativePath,
+                size: stats.size,
+                ext: rawExt.toLowerCase(),
+                isImage: ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico', '.avif'].includes(rawExt.toLowerCase()),
+                isPdf: rawExt.toLowerCase() === '.pdf',
+              });
+            } catch (err) {
+              console.error('[VisualMD] Failed to write imported asset:', err);
+            }
           }
         }
-
-        const doc = db.createDocument(title, content, targetFolderId, targetPath);
-        imported.push(doc);
       }
 
-      if (dataDir && imported.length > 0) {
-        await autoCommitDataChange(dataDir, `Import ${imported.length} document(s)`).catch(() => {});
+      const totalCount = importedDocs.length + importedAssets.length;
+      if (dataDir && totalCount > 0) {
+        await autoCommitDataChange(dataDir, `Import ${totalCount} file(s)`).catch(() => {});
       }
 
-      broadcastEvent('sync', { type: 'import', count: imported.length });
+      broadcastEvent('sync', {
+        type: 'import',
+        count: totalCount,
+        docCount: importedDocs.length,
+        assetCount: importedAssets.length,
+      });
       res.status(201).json({
         success: true,
-        count: imported.length,
-        docs: imported,
-        documents: imported,
+        count: totalCount,
+        docs: importedDocs,
+        documents: importedDocs,
+        assets: importedAssets,
       });
     } catch (err: any) {
       console.error('[VisualMD] Failed to import documents:', err);

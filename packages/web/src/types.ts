@@ -97,3 +97,14 @@ export interface DocumentVersion {
   created_at: string;
   content_length?: number;
 }
+
+export interface WorkspaceAsset {
+  name: string;
+  relativePath: string;
+  size: number;
+  ext: string;
+  isImage: boolean;
+  isPdf: boolean;
+  folderId?: string | null;
+  folderName?: string | null;
+}

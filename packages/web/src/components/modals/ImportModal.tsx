@@ -11,6 +11,14 @@ interface ImportModalProps {
   onImportComplete: () => void;
 }
 
+interface ImportFileItem {
+  name: string;
+  content: string;
+  encoding: 'base64' | 'utf-8';
+  isAsset: boolean;
+  size: number;
+}
+
 export const ImportModal: React.FC<ImportModalProps> = ({
   isOpen,
   onClose,
@@ -20,7 +28,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(currentFolderId);
-  const [filesToImport, setFilesToImport] = useState<Array<{ name: string; content: string }>>([]);
+  const [filesToImport, setFilesToImport] = useState<ImportFileItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
@@ -38,15 +46,35 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     if (!fileList) return;
     setImportError(null);
     const promises = Array.from(fileList).map((file) => {
-      return new Promise<{ name: string; content: string }>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          resolve({
-            name: file.name,
-            content: (e.target?.result as string) || '',
-          });
-        };
-        reader.readAsText(file);
+      return new Promise<ImportFileItem>((resolve) => {
+        const isBinary = !/\.(vmd|md|markdown|txt|json|yaml|yml)$/i.test(file.name);
+        if (isBinary) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const dataUrl = (e.target?.result as string) || '';
+            const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+            resolve({
+              name: file.name,
+              content: base64,
+              encoding: 'base64',
+              isAsset: true,
+              size: file.size,
+            });
+          };
+          reader.readAsDataURL(file);
+        } else {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            resolve({
+              name: file.name,
+              content: (e.target?.result as string) || '',
+              encoding: 'utf-8',
+              isAsset: false,
+              size: file.size,
+            });
+          };
+          reader.readAsText(file);
+        }
       });
     });
 
@@ -84,7 +112,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          files: filesToImport.map((f) => ({ name: f.name, content: f.content })),
+          files: filesToImport.map((f) => ({
+            name: f.name,
+            content: f.content,
+            encoding: f.encoding,
+            isAsset: f.isAsset,
+          })),
           folder_id: selectedFolderId && selectedFolderId !== '' ? selectedFolderId : null,
         }),
       });
@@ -162,7 +195,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               id="file-upload-input"
               type="file"
               multiple
-              accept=".md,.vmd,.txt"
+              accept=".md,.vmd,.markdown,.txt,.pdf,.png,.jpg,.jpeg,.gif,.svg,.webp,.avif,.bmp,.ico"
               className="hidden"
               onChange={(e) => handleFiles(e.target.files)}
             />
@@ -171,36 +204,62 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               Click to browse or drag & drop files here
             </p>
             <p className="text-[11px] text-[var(--text-muted)] mt-1">
-              Files are safely copied to your central data/ folder
+              Markdown (.vmd, .md), Documents (.pdf), & Images (.png, .jpg, .svg...)
+            </p>
+            <p className="text-[10px] text-[var(--text-muted)]/80 mt-1 font-mono">
+              {selectedFolderId
+                ? '📁 Files will be saved directly in the selected folder'
+                : '📁 Files will be saved in workspace root'}
             </p>
           </div>
 
           {/* File Queue */}
           {filesToImport.length > 0 && (
-            <div className="space-y-1 max-h-36 overflow-y-auto">
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
               <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                 Files Ready ({filesToImport.length}):
               </span>
-              {filesToImport.map((f, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs text-[var(--text-primary)]"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                    <span className="truncate">{f.name}</span>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setFilesToImport((prev) => prev.filter((_, i) => i !== idx));
-                    }}
-                    className="text-[var(--text-muted)] hover:text-rose-500 p-0.5"
+              {filesToImport.map((f, idx) => {
+                const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
+                const isPdf = ext === '.pdf';
+                const isImg = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico', '.avif'].includes(ext);
+
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs text-[var(--text-primary)]"
                   >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-2 truncate">
+                      {isPdf ? (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-500 border border-rose-500/30 shrink-0">
+                          PDF
+                        </span>
+                      ) : isImg ? (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-500 border border-purple-500/30 shrink-0">
+                          IMG
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500 border border-blue-500/30 shrink-0">
+                          DOC
+                        </span>
+                      )}
+                      <span className="truncate font-medium">{f.name}</span>
+                      <span className="text-[10px] text-[var(--text-muted)] font-mono shrink-0">
+                        ({(f.size / 1024).toFixed(1)} KB)
+                      </span>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFilesToImport((prev) => prev.filter((_, i) => i !== idx));
+                      }}
+                      className="text-[var(--text-muted)] hover:text-rose-500 p-0.5 rounded hover:bg-[var(--bg-tertiary)]"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 

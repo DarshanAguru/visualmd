@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, DocumentMeta } from '../../types';
+import { Folder, DocumentMeta, WorkspaceAsset } from '../../types';
 import {
   Folder as FolderIcon,
   FolderOpen,
   FolderPlus,
   FolderInput,
   FileText,
+  File as FileIcon,
+  Image as ImageIcon,
   Plus,
   Upload,
   Search,
@@ -31,8 +33,10 @@ interface SidebarProps {
   documents: DocumentMeta[];
   selectedFolderId: string | null;
   selectedDocId: string | null;
+  selectedAsset?: WorkspaceAsset | null;
   onSelectFolder: (folderId: string | null) => void;
   onSelectDoc: (docId: string) => void;
+  onSelectAsset?: (asset: WorkspaceAsset | null) => void;
   onCreateFolder: (name: string) => void;
   onRenameFolder?: (id: string, newName: string) => void;
   onDeleteFolder: (id: string) => void;
@@ -53,8 +57,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   documents,
   selectedFolderId,
   selectedDocId,
+  selectedAsset,
   onSelectFolder,
   onSelectDoc,
+  onSelectAsset,
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
@@ -73,11 +79,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [editingFolderName, setEditingFolderName] = useState('');
   const [filterText, setFilterText] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [workspaceAssets, setWorkspaceAssets] = useState<
-    Array<{ name: string; relativePath: string; size: number; ext: string; isImage: boolean }>
-  >([]);
-  const [isAssetsOpen, setIsAssetsOpen] = useState(false);
-  const [copiedAssetPath, setCopiedAssetPath] = useState<string | null>(null);
+  const [workspaceAssets, setWorkspaceAssets] = useState<WorkspaceAsset[]>([]);
+  const [expandedAssetFolders, setExpandedAssetFolders] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (selectedAsset) {
+      const key = selectedAsset.folderId || '__root__';
+      setExpandedAssetFolders((prev) => ({
+        ...prev,
+        [key]: true,
+      }));
+    }
+  }, [selectedAsset]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -139,12 +152,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [isResizing, sidebarWidth]);
 
-  // Active opened document's parent folder ID
+  // Active opened document's or asset's parent folder ID
   const activeParentFolderId = React.useMemo(() => {
-    if (!selectedDocId) return null;
-    const doc = documents.find((d) => d.id === selectedDocId);
-    return doc?.folder_id || null;
-  }, [selectedDocId, documents]);
+    if (selectedDocId) {
+      const doc = documents.find((d) => d.id === selectedDocId);
+      if (doc?.folder_id) return doc.folder_id;
+    }
+    if (selectedAsset?.folderId) {
+      return selectedAsset.folderId;
+    }
+    return null;
+  }, [selectedDocId, selectedAsset, documents]);
 
   // VS Code-style folder expanded/collapsed state:
   // Folders are collapsed by default EXCEPT the opened doc's parent folder
@@ -217,6 +235,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const handleDeleteAsset = async (asset: WorkspaceAsset) => {
+    if (!confirm(`Delete asset "${asset.name}"?`)) return;
+    try {
+      const res = await fetch(`/api/assets/${encodeURI(asset.relativePath)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setWorkspaceAssets((prev) => prev.filter((a) => a.relativePath !== asset.relativePath));
+        if (selectedAsset?.relativePath === asset.relativePath) {
+          onSelectAsset?.(null);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete asset:', err);
+    }
+  };
+
   const handleSyncClick = async () => {
     if (onSyncDataDirectory) {
       setIsSyncing(true);
@@ -274,6 +309,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isDocVisible = (d: DocumentMeta) => {
     if (!searchTerm) return true;
     return d.title.toLowerCase().includes(searchTerm);
+  };
+
+  const isAssetVisible = (a: WorkspaceAsset) => {
+    if (!searchTerm) return true;
+    return a.name.toLowerCase().includes(searchTerm);
   };
 
   return (
@@ -411,9 +451,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           const isExpanded = !!expandedFolders[folder.id];
           const folderDocs = sortDocsByLatest(documents.filter((d) => d.folder_id === folder.id));
           const visibleDocs = folderDocs.filter(isDocVisible);
+          const folderAssets = workspaceAssets.filter(
+            (a) => a.folderId === folder.id || (a.folderName && a.folderName.toLowerCase() === folder.name.toLowerCase())
+          );
+          const visibleAssets = folderAssets.filter(isAssetVisible);
 
           // If filtering and no matches in this folder, hide folder
-          if (searchTerm && visibleDocs.length === 0) {
+          if (searchTerm && visibleDocs.length === 0 && visibleAssets.length === 0) {
             return null;
           }
 
@@ -521,9 +565,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      const totalItems = folderDocs.length + folderAssets.length;
                       const msg =
-                        folderDocs.length > 0
-                          ? `Delete folder "${folder.name}" and all ${folderDocs.length} document${folderDocs.length > 1 ? 's' : ''} inside it?`
+                        totalItems > 0
+                          ? `Delete folder "${folder.name}" and all ${totalItems} item${totalItems > 1 ? 's' : ''} inside it?`
                           : `Delete folder "${folder.name}"?`;
                       if (confirm(msg)) {
                         onDeleteFolder(folder.id);
@@ -534,123 +579,212 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
-                  <span className="text-[10px] font-mono text-[var(--text-muted)] ml-0.5">
-                    {folderDocs.length}
+                  <span
+                    className="text-[10px] font-mono text-[var(--text-muted)] ml-0.5"
+                    title={`${folderDocs.length} doc(s)${folderAssets.length ? `, ${folderAssets.length} asset(s)` : ''}`}
+                  >
+                    {folderDocs.length + folderAssets.length}
                   </span>
                 </div>
               </div>
 
-              {/* Nested Folder Documents (Indented Tree Children) */}
+              {/* Nested Folder Documents & Companion Assets (Indented Tree Children) */}
               {isExpanded && (
                 <div className="ml-3 pl-3 border-l border-[var(--border-color)]/70 space-y-0.5 my-0.5">
-                  {visibleDocs.length === 0 ? (
+                  {visibleDocs.length === 0 && visibleAssets.length === 0 ? (
                     <div className="text-[11px] text-[var(--text-muted)] italic py-1 px-2 select-none">
-                      {folderDocs.length === 0 ? 'Empty folder' : 'No matches'}
+                      {folderDocs.length === 0 && folderAssets.length === 0 ? 'Empty folder' : 'No matches'}
                     </div>
                   ) : (
-                    visibleDocs.map((doc) => {
-                      const isActive = selectedDocId === doc.id;
-                      return (
-                        <div
-                          key={doc.id}
-                          onClick={() => onSelectDoc(doc.id)}
-                          className={`group flex items-center justify-between px-2 py-1 rounded-md text-xs cursor-pointer transition-colors relative ${
-                            moveMenuDocId === doc.id ? 'z-30' : ''
-                          } ${
-                            isActive
-                              ? 'bg-[var(--accent-surface)] text-[var(--accent)] font-semibold border border-[var(--border-color)] shadow-xs'
-                              : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 flex-1 min-w-0 mr-1.5">
-                            <FileText className="w-3.5 h-3.5 shrink-0 opacity-70 text-blue-500" />
-                            <span className="truncate leading-tight font-normal">{doc.title}</span>
-                            {doc.created_at && (
-                              <span
-                                className="text-[10px] text-[var(--text-muted)] shrink-0 font-mono opacity-65 ml-auto"
-                                title={`Uploaded: ${new Date(doc.created_at).toLocaleString()}`}
-                              >
-                                {formatUploadTime(doc.created_at)}
+                    <>
+                      {/* Virtual Images & PDFs Folder within this created folder (Pinned to top of subfolder) */}
+                      {folderAssets.length > 0 && (
+                        <div className="pt-0.5 space-y-0.5">
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedAssetFolders((prev) => ({
+                                ...prev,
+                                [folder.id]: !prev[folder.id],
+                              }));
+                            }}
+                            className="group flex items-center justify-between px-2 py-1 rounded-md text-xs cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] select-none transition-colors"
+                          >
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                              <span className="p-0.5 text-[var(--text-muted)] group-hover:text-[var(--text-primary)]">
+                                {expandedAssetFolders[folder.id] ? (
+                                  <ChevronDown className="w-3 h-3" />
+                                ) : (
+                                  <ChevronRight className="w-3 h-3" />
+                                )}
                               </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-0.5">
-                            {onMoveDoc && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setMoveMenuDocId(moveMenuDocId === doc.id ? null : doc.id);
-                                }}
-                                className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-tertiary)] transition-opacity"
-                                title="Move document to folder..."
-                              >
-                                <FolderInput className="w-3 h-3" />
-                              </button>
-                            )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm(`Remove "${doc.title}"?`)) {
-                                  onDeleteDoc(doc.id);
-                                }
-                              }}
-                              className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-rose-500 rounded hover:bg-[var(--bg-tertiary)] transition-opacity"
-                              title="Remove document"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                              <FolderIcon className="w-3.5 h-3.5 text-purple-500/80 shrink-0" />
+                              <span className="truncate font-medium text-[11px]">Images & PDFs</span>
+                            </div>
+                            <span className="text-[10px] font-mono text-[var(--text-muted)] px-1.5 py-0.2 rounded bg-[var(--bg-card)] border border-[var(--border-color)]">
+                              {visibleAssets.length}
+                            </span>
                           </div>
 
-                          {/* Move to folder dropdown menu */}
-                          {moveMenuDocId === doc.id && onMoveDoc && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-[65]"
+                          {expandedAssetFolders[folder.id] && (
+                            <div className="ml-3 pl-2.5 border-l border-purple-500/30 space-y-0.5 my-0.5">
+                              {visibleAssets.map((asset) => {
+                                const isAssetActive = selectedAsset?.relativePath === asset.relativePath;
+                                return (
+                                  <div
+                                    key={asset.relativePath}
+                                    onClick={() => onSelectAsset?.(asset)}
+                                    className={`group flex items-center justify-between px-2 py-1 rounded-md text-xs cursor-pointer transition-colors relative ${
+                                      isAssetActive
+                                        ? 'bg-[var(--accent-surface)] text-[var(--accent)] font-semibold border border-[var(--border-color)] shadow-xs'
+                                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-1.5 flex-1 min-w-0 mr-1.5">
+                                      {asset.isPdf ? (
+                                        <FileText className="w-3.5 h-3.5 shrink-0 text-rose-500" />
+                                      ) : asset.isImage ? (
+                                        <ImageIcon className="w-3.5 h-3.5 shrink-0 text-purple-500" />
+                                      ) : (
+                                        <FileIcon className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                                      )}
+                                      <span className="truncate leading-tight font-normal">{asset.name}</span>
+                                      <span
+                                        className={`text-[9px] font-bold px-1 py-0.2 rounded shrink-0 ml-auto ${
+                                          asset.isPdf
+                                            ? 'bg-rose-500/15 text-rose-500'
+                                            : asset.isImage
+                                            ? 'bg-purple-500/15 text-purple-500'
+                                            : 'bg-blue-500/15 text-blue-500'
+                                        }`}
+                                      >
+                                        {asset.isPdf ? 'PDF' : asset.isImage ? 'IMG' : asset.ext.toUpperCase().replace('.', '')}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-0.5">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteAsset(asset);
+                                        }}
+                                        className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-rose-500 rounded hover:bg-[var(--bg-tertiary)] transition-opacity"
+                                        title="Delete resource"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {visibleDocs.map((doc) => {
+                        const isActive = selectedDocId === doc.id;
+                        return (
+                          <div
+                            key={doc.id}
+                            onClick={() => onSelectDoc(doc.id)}
+                            className={`group flex items-center justify-between px-2 py-1 rounded-md text-xs cursor-pointer transition-colors relative ${
+                              moveMenuDocId === doc.id ? 'z-30' : ''
+                            } ${
+                              isActive
+                                ? 'bg-[var(--accent-surface)] text-[var(--accent)] font-semibold border border-[var(--border-color)] shadow-xs'
+                                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0 mr-1.5">
+                              <FileText className="w-3.5 h-3.5 shrink-0 opacity-70 text-blue-500" />
+                              <span className="truncate leading-tight font-normal">{doc.title}</span>
+                              {doc.created_at && (
+                                <span
+                                  className="text-[10px] text-[var(--text-muted)] shrink-0 font-mono opacity-65 ml-auto"
+                                  title={`Uploaded: ${new Date(doc.created_at).toLocaleString()}`}
+                                >
+                                  {formatUploadTime(doc.created_at)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-0.5">
+                              {onMoveDoc && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMoveMenuDocId(moveMenuDocId === doc.id ? null : doc.id);
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-tertiary)] transition-opacity"
+                                  title="Move document to folder..."
+                                >
+                                  <FolderInput className="w-3 h-3" />
+                                </button>
+                              )}
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setMoveMenuDocId(null);
+                                  if (confirm(`Remove "${doc.title}"?`)) {
+                                    onDeleteDoc(doc.id);
+                                  }
                                 }}
-                              />
-                              <div
-                                onClick={(e) => e.stopPropagation()}
-                                className="absolute right-2 top-full mt-1 z-[70] w-44 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-xl py-1 text-xs"
+                                className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-rose-500 rounded hover:bg-[var(--bg-tertiary)] transition-opacity"
+                                title="Remove document"
                               >
-                              <div className="px-2 py-1 font-semibold text-[10px] text-[var(--text-muted)] uppercase border-b border-[var(--border-color)]">
-                                Move to folder
-                              </div>
-                              <button
-                                onClick={() => {
-                                  onMoveDoc(doc.id, null);
-                                  setMoveMenuDocId(null);
-                                }}
-                                className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5 hover:bg-[var(--bg-tertiary)] ${
-                                  !doc.folder_id ? 'font-bold text-[var(--accent)]' : 'text-[var(--text-secondary)]'
-                                }`}
-                              >
-                                <FileText className="w-3 h-3 opacity-60" />
-                                <span>Root (No Folder)</span>
+                                <Trash2 className="w-3 h-3" />
                               </button>
-                              {sortedFolders.map((f) => (
-                                <button
-                                  key={f.id}
-                                  onClick={() => {
-                                    onMoveDoc(doc.id, f.id);
+                            </div>
+
+                            {/* Move to folder dropdown menu */}
+                            {moveMenuDocId === doc.id && onMoveDoc && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-[65]"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setMoveMenuDocId(null);
                                   }}
-                                  className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5 hover:bg-[var(--bg-tertiary)] truncate ${
-                                    doc.folder_id === f.id ? 'font-bold text-[var(--accent)]' : 'text-[var(--text-secondary)]'
-                                  }`}
+                                />
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="absolute right-2 top-full mt-1 z-[70] w-44 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-xl py-1 text-xs"
                                 >
-                                  <FolderIcon className="w-3 h-3 text-amber-500 shrink-0" />
-                                  <span className="truncate">{f.name}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                        </div>
-                      );
-                    })
+                                  <div className="px-2 py-1 font-semibold text-[10px] text-[var(--text-muted)] uppercase border-b border-[var(--border-color)]">
+                                    Move to folder
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      onMoveDoc(doc.id, null);
+                                      setMoveMenuDocId(null);
+                                    }}
+                                    className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5 hover:bg-[var(--bg-tertiary)] ${
+                                      !doc.folder_id ? 'font-bold text-[var(--accent)]' : 'text-[var(--text-secondary)]'
+                                    }`}
+                                  >
+                                    <FileText className="w-3 h-3 opacity-60" />
+                                    <span>Root (No Folder)</span>
+                                  </button>
+                                  {sortedFolders.map((f) => (
+                                    <button
+                                      key={f.id}
+                                      onClick={() => {
+                                        onMoveDoc(doc.id, f.id);
+                                        setMoveMenuDocId(null);
+                                      }}
+                                      className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5 hover:bg-[var(--bg-tertiary)] truncate ${
+                                        doc.folder_id === f.id ? 'font-bold text-[var(--accent)]' : 'text-[var(--text-secondary)]'
+                                      }`}
+                                    >
+                                      <FolderIcon className="w-3 h-3 text-amber-500 shrink-0" />
+                                      <span className="truncate">{f.name}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
                   )}
                 </div>
               )}
@@ -658,183 +792,218 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
 
-        {/* Root Level Documents (Documents outside any folder) */}
-        {rootDocuments.filter(isDocVisible).length > 0 && (
-          <div className="pt-2">
-            {folders.length > 0 && (
-              <div className="px-2 py-1 text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase select-none">
-                Root Documents
-              </div>
-            )}
-            <div className="space-y-0.5">
-              {rootDocuments.filter(isDocVisible).map((doc) => {
-                const isActive = selectedDocId === doc.id;
-                return (
-                  <div
-                    key={doc.id}
-                    onClick={() => onSelectDoc(doc.id)}
-                    className={`group flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs cursor-pointer transition-colors relative ${
-                      moveMenuDocId === doc.id ? 'z-30' : ''
-                    } ${
-                      isActive
-                        ? 'bg-[var(--accent-surface)] text-[var(--accent)] font-semibold border border-[var(--border-color)] shadow-xs'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 flex-1 min-w-0 mr-1.5">
-                      <FileText className="w-3.5 h-3.5 shrink-0 opacity-70 text-blue-500" />
-                      <span className="truncate font-normal">{doc.title}</span>
-                      {doc.created_at && (
-                        <span
-                          className="text-[10px] text-[var(--text-muted)] shrink-0 font-mono opacity-65 ml-auto"
-                          title={`Uploaded: ${new Date(doc.created_at).toLocaleString()}`}
-                        >
-                          {formatUploadTime(doc.created_at)}
+        {/* Root Level Documents & Companion Files (Documents and Assets outside any folder) */}
+        {(() => {
+          const rootAssets = workspaceAssets.filter(
+            (a) => !a.folderId && (!a.folderName || a.folderName.toLowerCase() === 'assets')
+          );
+          const visibleRootAssets = rootAssets.filter(isAssetVisible);
+          const visibleRootDocs = rootDocuments.filter(isDocVisible);
+
+          if (visibleRootDocs.length === 0 && visibleRootAssets.length === 0) return null;
+
+          return (
+            <div className="pt-2">
+              {folders.length > 0 && (
+                <div className="px-2 py-1 text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase select-none">
+                  Root Documents & Files
+                </div>
+              )}
+              <div className="space-y-0.5">
+                {/* Virtual Root Images & PDFs Folder (Pinned to top of root) */}
+                {rootAssets.length > 0 && (
+                  <div className="pt-0.5 space-y-0.5">
+                    <div
+                      onClick={() =>
+                        setExpandedAssetFolders((prev) => ({
+                          ...prev,
+                          __root__: !prev.__root__,
+                        }))
+                      }
+                      className="group flex items-center justify-between px-2.5 py-1 rounded-md text-xs cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] select-none transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <span className="p-0.5 text-[var(--text-muted)] group-hover:text-[var(--text-primary)]">
+                          {expandedAssetFolders['__root__'] ? (
+                            <ChevronDown className="w-3 h-3" />
+                          ) : (
+                            <ChevronRight className="w-3 h-3" />
+                          )}
                         </span>
-                      )}
+                        <FolderIcon className="w-3.5 h-3.5 text-purple-500/80 shrink-0" />
+                        <span className="truncate font-medium text-[11px]">Images & PDFs</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-[var(--text-muted)] px-1.5 py-0.2 rounded bg-[var(--bg-card)] border border-[var(--border-color)]">
+                        {visibleRootAssets.length}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-0.5">
-                      {onMoveDoc && (
+
+                    {expandedAssetFolders['__root__'] && (
+                      <div className="ml-3 pl-2.5 border-l border-purple-500/30 space-y-0.5 my-0.5">
+                        {visibleRootAssets.map((asset) => {
+                          const isAssetActive = selectedAsset?.relativePath === asset.relativePath;
+                          return (
+                            <div
+                              key={asset.relativePath}
+                              onClick={() => onSelectAsset?.(asset)}
+                              className={`group flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs cursor-pointer transition-colors relative ${
+                                isAssetActive
+                                  ? 'bg-[var(--accent-surface)] text-[var(--accent)] font-semibold border border-[var(--border-color)] shadow-xs'
+                                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 flex-1 min-w-0 mr-1.5">
+                                {asset.isPdf ? (
+                                  <FileText className="w-3.5 h-3.5 shrink-0 text-rose-500" />
+                                ) : asset.isImage ? (
+                                  <ImageIcon className="w-3.5 h-3.5 shrink-0 text-purple-500" />
+                                ) : (
+                                  <FileIcon className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                                )}
+                                <span className="truncate font-normal">{asset.name}</span>
+                                <span
+                                  className={`text-[9px] font-bold px-1 py-0.2 rounded shrink-0 ml-auto ${
+                                    asset.isPdf
+                                      ? 'bg-rose-500/15 text-rose-500'
+                                      : asset.isImage
+                                      ? 'bg-purple-500/15 text-purple-500'
+                                      : 'bg-blue-500/15 text-blue-500'
+                                  }`}
+                                >
+                                  {asset.isPdf ? 'PDF' : asset.isImage ? 'IMG' : asset.ext.toUpperCase().replace('.', '')}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-0.5">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteAsset(asset);
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-rose-500 rounded hover:bg-[var(--bg-tertiary)] transition-opacity"
+                                  title="Delete resource"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {visibleRootDocs.map((doc) => {
+                  const isActive = selectedDocId === doc.id;
+                  return (
+                    <div
+                      key={doc.id}
+                      onClick={() => onSelectDoc(doc.id)}
+                      className={`group flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs cursor-pointer transition-colors relative ${
+                        moveMenuDocId === doc.id ? 'z-30' : ''
+                      } ${
+                        isActive
+                          ? 'bg-[var(--accent-surface)] text-[var(--accent)] font-semibold border border-[var(--border-color)] shadow-xs'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0 mr-1.5">
+                        <FileText className="w-3.5 h-3.5 shrink-0 opacity-70 text-blue-500" />
+                        <span className="truncate font-normal">{doc.title}</span>
+                        {doc.created_at && (
+                          <span
+                            className="text-[10px] text-[var(--text-muted)] shrink-0 font-mono opacity-65 ml-auto"
+                            title={`Uploaded: ${new Date(doc.created_at).toLocaleString()}`}
+                          >
+                            {formatUploadTime(doc.created_at)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        {onMoveDoc && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMoveMenuDocId(moveMenuDocId === doc.id ? null : doc.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-tertiary)] transition-opacity"
+                            title="Move document to folder..."
+                          >
+                            <FolderInput className="w-3 h-3" />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setMoveMenuDocId(moveMenuDocId === doc.id ? null : doc.id);
+                            if (confirm(`Remove "${doc.title}"?`)) {
+                              onDeleteDoc(doc.id);
+                            }
                           }}
-                          className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--bg-tertiary)] transition-opacity"
-                          title="Move document to folder..."
+                          className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-rose-500 rounded hover:bg-[var(--bg-tertiary)] transition-opacity"
+                          title="Remove document"
                         >
-                          <FolderInput className="w-3 h-3" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm(`Remove "${doc.title}"?`)) {
-                            onDeleteDoc(doc.id);
-                          }
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-rose-500 rounded hover:bg-[var(--bg-tertiary)] transition-opacity"
-                        title="Remove document"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
+                      </div>
 
-                    {/* Move to folder dropdown menu */}
-                    {moveMenuDocId === doc.id && onMoveDoc && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-[65]"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMoveMenuDocId(null);
-                          }}
-                        />
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute right-2 top-full mt-1 z-[70] w-44 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-xl py-1 text-xs"
-                        >
-                          <div className="px-2 py-1 font-semibold text-[10px] text-[var(--text-muted)] uppercase border-b border-[var(--border-color)]">
-                            Move to folder
-                          </div>
-                          <button
-                            onClick={() => {
-                              onMoveDoc(doc.id, null);
+                      {/* Move to folder dropdown menu */}
+                      {moveMenuDocId === doc.id && onMoveDoc && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-[65]"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setMoveMenuDocId(null);
                             }}
-                            className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5 hover:bg-[var(--bg-tertiary)] ${
-                              !doc.folder_id ? 'font-bold text-[var(--accent)]' : 'text-[var(--text-secondary)]'
-                            }`}
+                          />
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute right-2 top-full mt-1 z-[70] w-44 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-xl py-1 text-xs"
                           >
-                            <FileText className="w-3 h-3 opacity-60" />
-                            <span>Root (No Folder)</span>
-                          </button>
-                          {sortedFolders.map((f) => (
+                            <div className="px-2 py-1 font-semibold text-[10px] text-[var(--text-muted)] uppercase border-b border-[var(--border-color)]">
+                              Move to folder
+                            </div>
                             <button
-                              key={f.id}
                               onClick={() => {
-                                onMoveDoc(doc.id, f.id);
+                                onMoveDoc(doc.id, null);
                                 setMoveMenuDocId(null);
                               }}
-                              className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5 hover:bg-[var(--bg-tertiary)] truncate ${
-                                doc.folder_id === f.id ? 'font-bold text-[var(--accent)]' : 'text-[var(--text-secondary)]'
+                              className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5 hover:bg-[var(--bg-tertiary)] ${
+                                !doc.folder_id ? 'font-bold text-[var(--accent)]' : 'text-[var(--text-secondary)]'
                               }`}
                             >
-                              <FolderIcon className="w-3 h-3 text-amber-500 shrink-0" />
-                              <span className="truncate">{f.name}</span>
+                              <FileText className="w-3 h-3 opacity-60" />
+                              <span>Root (No Folder)</span>
                             </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {documents.filter(isDocVisible).length === 0 && (
-          <div className="p-4 text-center text-xs text-[var(--text-muted)] italic">
-            No matching documents found.
-          </div>
-        )}
-
-        {/* Workspace Companion Assets & Images */}
-        {workspaceAssets.length > 0 && (
-          <div className="mt-3 border-t border-[var(--border-color)]/60 pt-2.5">
-            <button
-              onClick={() => setIsAssetsOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors select-none group cursor-pointer"
-            >
-              <div className="flex items-center gap-1.5">
-                <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-150 ${isAssetsOpen ? 'rotate-90' : ''}`} />
-                <span className="uppercase tracking-wider text-[10px]">Resources & Assets</span>
-              </div>
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
-                {workspaceAssets.length}
-              </span>
-            </button>
-
-            {isAssetsOpen && (
-              <div className="mt-1 space-y-0.5 pl-2">
-                {workspaceAssets.map((asset) => (
-                  <div
-                    key={asset.relativePath}
-                    className="flex items-center justify-between px-2 py-1 rounded-md text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] group/asset transition-colors"
-                  >
-                    <a
-                      href={`/api/assets/${asset.relativePath}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 min-w-0 flex-1 hover:underline truncate"
-                      title={`${asset.name} (${(asset.size / 1024).toFixed(1)} KB) - Click to view`}
-                    >
-                      {asset.isImage ? (
-                        <span className="text-xs">🖼️</span>
-                      ) : (
-                        <span className="text-xs">📎</span>
+                            {sortedFolders.map((f) => (
+                              <button
+                                key={f.id}
+                                onClick={() => {
+                                  onMoveDoc(doc.id, f.id);
+                                  setMoveMenuDocId(null);
+                                }}
+                                className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5 hover:bg-[var(--bg-tertiary)] truncate ${
+                                  doc.folder_id === f.id ? 'font-bold text-[var(--accent)]' : 'text-[var(--text-secondary)]'
+                                }`}
+                              >
+                                <FolderIcon className="w-3 h-3 text-amber-500 shrink-0" />
+                                <span className="truncate">{f.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
                       )}
-                      <span className="truncate text-[11px]">{asset.name}</span>
-                    </a>
-                    <button
-                      onClick={() => {
-                        const snippet = asset.isImage
-                          ? `![${asset.name}](./${asset.relativePath})`
-                          : `[${asset.name}](./${asset.relativePath})`;
-                        navigator.clipboard.writeText(snippet);
-                        setCopiedAssetPath(asset.relativePath);
-                        setTimeout(() => setCopiedAssetPath(null), 1500);
-                      }}
-                      className="opacity-0 group-hover/asset:opacity-100 text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-color)] hover:text-[var(--accent)] transition-all cursor-pointer shrink-0"
-                      title="Copy Markdown tag to clipboard"
-                    >
-                      {copiedAssetPath === asset.relativePath ? '✓ Copied' : 'Copy Tag'}
-                    </button>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
-            )}
+            </div>
+          );
+        })()}
+
+        {documents.filter(isDocVisible).length === 0 && workspaceAssets.filter(isAssetVisible).length === 0 && (
+          <div className="p-4 text-center text-xs text-[var(--text-muted)] italic">
+            No matching documents or files found.
           </div>
         )}
       </div>
