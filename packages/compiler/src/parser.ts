@@ -48,9 +48,10 @@ function parseParams(paramString: string): Record<string, string> {
   return result;
 }
 
-export function parseVisualMD(rawText: string, options: ParseOptions = {}): VmdDocument {
+export function parseVisualMD(rawText: string = '', options: ParseOptions = {}): VmdDocument {
+  const safeText = typeof rawText === 'string' ? rawText : '';
   const autoHeal = options.autoHeal ?? true;
-  const lines = rawText.split(/\r?\n/);
+  const lines = safeText.split(/\r?\n/);
   const nodes: VmdNode[] = [];
 
   let currentTitle = 'Untitled VisualMD Document';
@@ -70,7 +71,7 @@ export function parseVisualMD(rawText: string, options: ParseOptions = {}): VmdD
       if (inFence) return true;
       if (/^\$[A-Z_]+(\$S|\$E)/i.test(trimmed)) return false;
       if (/^\$TAB(\?|$)/i.test(trimmed)) return false;
-      if (/^\$STEP@\d+/i.test(trimmed)) return false;
+      if (/^\$STEP(?:@\d+)?(?:\?|$)/i.test(trimmed)) return false;
       if (/^\$EXPLANATION/i.test(trimmed)) return false;
       return true;
     });
@@ -462,14 +463,15 @@ export function parseVisualMD(rawText: string, options: ParseOptions = {}): VmdD
   return {
     title: currentTitle,
     nodes,
-    rawLength: rawText.length,
+    rawLength: safeText.length,
     parsedAt: new Date().toISOString(),
   };
 }
 
-export function validateVisualMD(rawText: string): { isValid: boolean; errors: string[] } {
+export function validateVisualMD(rawText: string = ''): { isValid: boolean; errors: string[] } {
+  const safeText = typeof rawText === 'string' ? rawText : '';
   const errors: string[] = [];
-  const lines = rawText.split(/\r?\n/);
+  const lines = safeText.split(/\r?\n/);
   const openStack: { type: string; line: number }[] = [];
   let inMarkdownCodeFence = false;
 

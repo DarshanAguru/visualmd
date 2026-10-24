@@ -319,6 +319,51 @@ $QUIZ$E`;
   assert.equal(quiz.options[2].isCorrect, false);
 });
 
+test('VisualMD Compiler (v1.0.2482) - Null, undefined, and non-string input guards', () => {
+  // Should never throw on null, undefined, numbers or objects
+  // @ts-ignore
+  const docNull = parseVisualMD(null);
+  assert.equal(docNull.title, 'Untitled VisualMD Document');
+  assert.equal(docNull.nodes.length, 0);
+
+  // @ts-ignore
+  const docUndefined = parseVisualMD(undefined);
+  assert.equal(docUndefined.title, 'Untitled VisualMD Document');
+  assert.equal(docUndefined.nodes.length, 0);
+
+  // @ts-ignore
+  const valNull = validateVisualMD(null);
+  assert.equal(valNull.isValid, true);
+  assert.equal(valNull.errors.length, 0);
+
+  // @ts-ignore
+  const valUndefined = validateVisualMD(undefined);
+  assert.equal(valUndefined.isValid, true);
+  assert.equal(valUndefined.errors.length, 0);
+});
+
+test('VisualMD Compiler (v1.0.2482) - Stepper unnumbered $STEP cleanMarkdownLines filtering', () => {
+  const input = `# Workflow Guide
+
+$STEPPER$S?title=Deployment+Steps
+$STEP?title=Build+Artifacts
+Execute build pipeline.
+$STEP?title=Deploy+To+Staging
+Deploy artifacts to staging cluster.
+$STEPPER$E
+
+Post deployment verification notes.`;
+
+  const doc = parseVisualMD(input);
+  assert.equal(doc.title, 'Workflow Guide');
+  assert.equal(doc.nodes.length, 3);
+  assert.equal(doc.nodes[0].type, 'markdown');
+  assert.equal(doc.nodes[1].type, 'stepper');
+  assert.equal(doc.nodes[2].type, 'markdown');
+  assert.doesNotMatch(doc.nodes[2].content, /\$STEP/);
+});
+
+
 
 
 

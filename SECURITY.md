@@ -4,7 +4,8 @@
 
 | Version | Status | Security Support | Release Notes / Highlights |
 | :--- | :--- | :--- | :--- |
-| **v1.0.248** | **Latest (Current)** | :white_check_mark: Actively Supported | In-app native PDF viewer & interactive image viewer, virtual folder companion assets grouping (1-level depth with nested subfolder immunity), direct asset deletion API, and multi-resource Markdown workflow |
+| **v1.0.2482** | **Latest (Current)** | :white_check_mark: Actively Supported | Adaptive math & table parser engine preventing table row swallowing, currency false-positive immunity, horizontal scroll containment for wide tables, defensive compiler guards against malformed inputs |
+| **v1.0.248** | Previous Release | :white_check_mark: Actively Supported | In-app native PDF viewer & interactive image viewer, virtual folder companion assets grouping (1-level depth with nested subfolder immunity), direct asset deletion API, and multi-resource Markdown workflow |
 | **v1.0.246** | Previous Release | :white_check_mark: Actively Supported | Foreign key constraint resilience, folder auto-prune immunity on creation, Express exception crash protection, folder cascade disassociation |
 | **v1.0.244** | Previous Release | :white_check_mark: Actively Supported | Streamlined 2-doc tutorial, LeetCode streak calendar with custom threshold, frosted break screensaver, F11 fullscreen |
 | **v1.0.242** | Previous Release | :white_check_mark: Maintained | VCS rollback checkpoints, companion assets serving, FTS5 prefix search |

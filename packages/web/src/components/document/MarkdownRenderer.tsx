@@ -140,13 +140,21 @@ function preprocessMath(markdown: string): { text: string; mathMap: Map<string, 
   protectedText = protectedText.replace(/\$\$([\s\S]*?)\$\$/g, (_match, math) => {
     const key = `VMDMATHBLOCK${counter++}END`;
     mathMap.set(key, { math, isBlock: true });
-    return `\n\n${key}\n\n`;
+    return math.includes('\n') ? `\n\n${key}\n\n` : ` ${key} `;
   });
 
   // 2. Inline math: $...$
-  protectedText = protectedText.replace(/(?<!\\)\$([^\s$](?:[^$]*?[^\s$])?)\$/g, (match, math) => {
-    // If it's pure numbers/currency e.g. $50 or $100.00, leave as literal currency
-    if (/^\d+(?:\.\d{1,2})?$/.test(math.trim())) {
+  // Pandoc / LaTeX standard to avoid false positives with currency e.g. $83B or US$ 721B:
+  // - Opening $: cannot be preceded by alphanumeric or backslash
+  // - Opening $: cannot be followed by space or digit
+  // - Body: cannot contain $, \n, or table cell delimiter |
+  // - Closing $: cannot be preceded by space
+  // - Closing $: cannot be followed by alphanumeric or digit
+  const isCurrency = (str: string) =>
+    /^\s*[\d,.]+\s*(?:[kKmMgGtTbB]|bn|mn|tr|cr|lakh|crore|million|billion|trillion)?\s*$/i.test(str.trim());
+
+  protectedText = protectedText.replace(/(?<![\w\\])\$(?!\s|\d)([^$\n|]+?)(?<!\s)\$(?![\w\d])/g, (match, math) => {
+    if (isCurrency(math)) {
       return match;
     }
     const key = `VMDMATHINLINE${counter++}END`;
@@ -203,6 +211,11 @@ function toggleTaskItem(markdown: string, targetIndex: number): string {
   return markdown;
 }
 
+function splitTableRow(line: string): string[] {
+  // Split on unescaped pipe | so that escaped pipes \| inside links or formulas do not divide cells
+  return line.split(/(?<!\\)\|/);
+}
+
 function getTableCellValue(markdown: string, tableIndex: number, rowIndex: number, colIndex: number): string {
   const lines = markdown.split(/\r?\n/);
   let currentTable = -1;
@@ -226,7 +239,7 @@ function getTableCellValue(markdown: string, tableIndex: number, rowIndex: numbe
 
       if (currentTable === tableIndex && currentBodyRow >= 0) {
         if (currentBodyRow === rowIndex) {
-          const cells = lines[i].split('|').slice(1, -1);
+          const cells = splitTableRow(lines[i]).slice(1, -1);
           if (colIndex >= 0 && colIndex < cells.length) {
             return cells[colIndex].trim();
           }
@@ -269,7 +282,7 @@ function updateTableCell(
 
       if (currentTable === tableIndex && currentBodyRow >= 0) {
         if (currentBodyRow === rowIndex) {
-          const rawParts = lines[i].split('|');
+          const rawParts = splitTableRow(lines[i]);
           const cells = rawParts.slice(1, -1);
           if (colIndex >= 0 && colIndex < cells.length) {
             cells[colIndex] = ' ' + newValue.replace(/\|/g, '\\|').trim() + ' ';
@@ -303,7 +316,7 @@ function addTableRow(markdown: string, tableIndex: number): string {
       if (currentTable === tableIndex) {
         lastRowLine = i;
         if (colCount === 0) {
-          colCount = line.split('|').slice(1, -1).length;
+          colCount = splitTableRow(line).slice(1, -1).length;
         }
       }
     } else {
@@ -362,7 +375,7 @@ function enhanceMarkdownHtml(rawHtml: string, editableTables: Set<number>): stri
     });
 
     return `
-      <div class="vmd-table-wrapper w-full max-w-full my-5 border border-[var(--border-color)] rounded-xl bg-[var(--bg-card)] shadow-xs relative">
+      <div class="vmd-table-wrapper w-full max-w-full my-5 border border-[var(--border-color)] rounded-xl bg-[var(--bg-card)] shadow-xs relative overflow-hidden">
         <div class="vmd-table-header flex items-center justify-between px-3.5 py-2 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] text-xs select-none">
           <div class="flex items-center gap-2 min-w-0">
             <span class="font-mono text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Table ${currentTableIdx + 1}</span>
@@ -384,7 +397,7 @@ function enhanceMarkdownHtml(rawHtml: string, editableTables: Set<number>): stri
             ` : ''}
           </div>
         </div>
-        <div class="vmd-table-scroll-container w-full max-w-full overflow-x-auto">
+        <div class="vmd-table-scroll-container w-full max-w-full overflow-x-auto overflow-y-hidden">
           ${enhancedTable}
         </div>
         <div class="vmd-table-footer flex items-center justify-between px-3.5 py-1.5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] text-[11px] text-[var(--text-muted)] select-none">

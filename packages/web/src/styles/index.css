@@ -530,7 +530,7 @@ body.theme-retro .markdown-body,
   border-radius: 0.75rem;
   border: 1px solid var(--border-color);
   background-color: var(--bg-card);
-  overflow: visible;
+  overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
@@ -548,7 +548,7 @@ body.theme-retro .markdown-body,
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: var(--border-color) transparent;
@@ -574,6 +574,7 @@ body.theme-retro .markdown-body,
 .markdown-body table {
   width: 100%;
   min-width: 100%;
+  table-layout: auto;
   border-collapse: separate;
   border-spacing: 0;
   font-size: calc(0.875rem * var(--vmd-font-scale, 1)) !important;
@@ -589,12 +590,11 @@ body.theme-retro .markdown-body,
   font-size: calc(0.875rem * var(--vmd-font-scale, 1)) !important;
   color: var(--text-primary) !important;
   position: relative;
-  word-break: normal;
+  word-break: break-word;
   overflow-wrap: anywhere;
   white-space: normal;
   line-height: 1.5;
-  min-width: 110px;
-  max-width: 480px;
+  min-width: 80px;
 }
 
 .markdown-body th:last-child, .markdown-body td:last-child {
@@ -611,7 +611,9 @@ body.theme-retro .markdown-body,
   color: var(--text-primary) !important;
   border-bottom: 2px solid var(--border-color);
   letter-spacing: 0.01em;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .markdown-body tbody tr:nth-child(even) {
