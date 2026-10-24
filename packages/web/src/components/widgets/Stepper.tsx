@@ -22,8 +22,26 @@ export const Stepper: React.FC<StepperProps> = ({
 
   const currentStep = steps[currentStepIdx] || steps[0];
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowRight') {
+      if (currentStepIdx < steps.length - 1) {
+        e.preventDefault();
+        setCurrentStepIdx((prev) => Math.min(steps.length - 1, prev + 1));
+      }
+    } else if (e.key === 'ArrowLeft') {
+      if (currentStepIdx > 0) {
+        e.preventDefault();
+        setCurrentStepIdx((prev) => Math.max(0, prev - 1));
+      }
+    }
+  };
+
   return (
-    <div className="my-6 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] shadow-xs overflow-hidden">
+    <div
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      className="my-6 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] shadow-xs overflow-hidden focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+    >
       {/* Stepper Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-color)]">
         <div className="flex items-center gap-2">

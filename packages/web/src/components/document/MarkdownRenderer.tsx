@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { marked } from 'marked';
+import katex from 'katex';
 import { Annotation } from '../../types';
 import { Check, X, Edit3, CornerDownLeft, MessageSquare, Trash2 } from 'lucide-react';
 
@@ -60,8 +61,43 @@ interface MathItem {
 }
 
 function renderMathExpression(math: string, isBlock: boolean): string {
-  let m = math.trim();
+  const m = math.trim();
   const escapedOriginal = escapeHtml(m);
+
+  // Normalize common unicode symbols / typos to standard LaTeX before passing to KaTeX
+  const normalized = m
+    .replace(/×/g, '\\times ')
+    .replace(/÷/g, '\\div ')
+    .replace(/≤/g, '\\le ')
+    .replace(/≥/g, '\\ge ')
+    .replace(/≠/g, '\\ne ')
+    .replace(/≈/g, '\\approx ');
+
+  try {
+    const rendered = katex.renderToString(normalized, {
+      displayMode: isBlock,
+      throwOnError: false,
+      strict: false,
+    });
+    if (isBlock) {
+      return `<div class="vmd-math-block select-text" title="Math formula: ${escapedOriginal}">${rendered}</div>`;
+    }
+    return `<span class="vmd-math select-text" title="Math: ${escapedOriginal}">${rendered}</span>`;
+  } catch (err) {
+    console.warn('[VisualMD] KaTeX rendering exception:', err);
+  }
+
+  // Resilient Fallback: If KaTeX fails unexpectedly, format clean HTML
+  let fallback = m
+    .replace(/\\text\{([^{}]+)\}/g, '$1')
+    .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1 / $2)')
+    .replace(/\\times\b/g, '×')
+    .replace(/\\div\b/g, '÷')
+    .replace(/\\%/g, '%')
+    .replace(/\\le\b|\\leq\b/g, '≤')
+    .replace(/\\ge\b|\\geq\b/g, '≥')
+    .replace(/\\ne\b|\\neq\b/g, '≠')
+    .replace(/\\approx\b/g, '≈');
 
   // Greek letters
   const greek: Record<string, string> = {
@@ -73,55 +109,23 @@ function renderMathExpression(math: string, isBlock: boolean): string {
     Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ',
     Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
   };
-  m = m.replace(/\\([a-zA-Z]+)/g, (match, word) => greek[word] || match);
-
-  // Mathematical operators & relations
-  m = m
-    .replace(/\\(?:le|leq)\b/g, '≤')
-    .replace(/\\(?:ge|geq)\b/g, '≥')
-    .replace(/\\(?:ne|neq)\b/g, '≠')
-    .replace(/\\approx\b/g, '≈')
-    .replace(/\\equiv\b/g, '≡')
-    .replace(/\\times\b/g, '×')
-    .replace(/\\cdot\b/g, '·')
-    .replace(/\\div\b/g, '÷')
-    .replace(/\\pm\b/g, '±')
-    .replace(/\\mp\b/g, '∓')
-    .replace(/\\in\b/g, '∈')
-    .replace(/\\notin\b/g, '∉')
-    .replace(/\\subset\b/g, '⊂')
-    .replace(/\\subseteq\b/g, '⊆')
-    .replace(/\\cap\b/g, '∩')
-    .replace(/\\cup\b/g, '∪')
-    .replace(/\\forall\b/g, '∀')
-    .replace(/\\exists\b/g, '∃')
-    .replace(/\\(?:to|rightarrow)\b/g, '→')
-    .replace(/\\leftarrow\b/g, '←')
-    .replace(/\\Rightarrow\b/g, '⇒')
-    .replace(/\\Leftarrow\b/g, '⇐')
-    .replace(/\\infty\b/g, '∞')
-    .replace(/\\partial\b/g, '∂')
-    .replace(/\\nabla\b/g, '∇')
-    .replace(/\\sqrt\{([^}]+)\}/g, '√($1)');
-
-  // Fractions: \frac{a}{b} -> (a / b)
-  m = m.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1 / $2)');
+  fallback = fallback.replace(/\\([a-zA-Z]+)/g, (match, word) => greek[word] || match);
 
   // Subscripts: X_1 or X_{abc}
-  m = m.replace(/([a-zA-Z0-9\)\}])_\{([^}]+)\}/g, '$1<sub>$2</sub>');
-  m = m.replace(/([a-zA-Z0-9\)\}])_([a-zA-Z0-9]+)/g, '$1<sub>$2</sub>');
+  fallback = fallback.replace(/([a-zA-Z0-9\)\}])_\{([^}]+)\}/g, '$1<sub>$2</sub>');
+  fallback = fallback.replace(/([a-zA-Z0-9\)\}])_([a-zA-Z0-9]+)/g, '$1<sub>$2</sub>');
 
   // Superscripts: X^2 or X^{abc}
-  m = m.replace(/([a-zA-Z0-9\)\}])\^\{([^}]+)\}/g, '$1<sup>$2</sup>');
-  m = m.replace(/([a-zA-Z0-9\)\}])\^([a-zA-Z0-9]+)/g, '$1<sup>$2</sup>');
+  fallback = fallback.replace(/([a-zA-Z0-9\)\}])\^\{([^}]+)\}/g, '$1<sup>$2</sup>');
+  fallback = fallback.replace(/([a-zA-Z0-9\)\}])\^([a-zA-Z0-9]+)/g, '$1<sup>$2</sup>');
 
   // Single-letter variable names italicized
-  m = m.replace(/\b([A-Za-z])\b(?![^<]*>)/g, '<i>$1</i>');
+  fallback = fallback.replace(/\b([A-Za-z])\b(?![^<]*>)/g, '<i>$1</i>');
 
   if (isBlock) {
-    return `<div class="vmd-math-block select-text" title="Math formula: ${escapedOriginal}">${m}</div>`;
+    return `<div class="vmd-math-block select-text" title="Math formula: ${escapedOriginal}">${fallback}</div>`;
   }
-  return `<span class="vmd-math select-text" title="Math: ${escapedOriginal}">${m}</span>`;
+  return `<span class="vmd-math select-text" title="Math: ${escapedOriginal}">${fallback}</span>`;
 }
 
 function preprocessMath(markdown: string): { text: string; mathMap: Map<string, MathItem> } {
@@ -143,7 +147,21 @@ function preprocessMath(markdown: string): { text: string; mathMap: Map<string, 
     return math.includes('\n') ? `\n\n${key}\n\n` : ` ${key} `;
   });
 
-  // 2. Inline math: $...$
+  // 2. LaTeX display math delimiters: \[...\]
+  protectedText = protectedText.replace(/\\\[([\s\S]*?)\\\]/g, (_match, math) => {
+    const key = `VMDMATHBLOCK${counter++}END`;
+    mathMap.set(key, { math, isBlock: true });
+    return math.includes('\n') ? `\n\n${key}\n\n` : ` ${key} `;
+  });
+
+  // 3. LaTeX inline math delimiters: \(...\)
+  protectedText = protectedText.replace(/\\\(([\s\S]*?)\\\)/g, (_match, math) => {
+    const key = `VMDMATHINLINE${counter++}END`;
+    mathMap.set(key, { math, isBlock: false });
+    return key;
+  });
+
+  // 4. Standard inline math: $...$
   // Pandoc / LaTeX standard to avoid false positives with currency e.g. $83B or US$ 721B:
   // - Opening $: cannot be preceded by alphanumeric or backslash
   // - Opening $: cannot be followed by space or digit
@@ -160,6 +178,13 @@ function preprocessMath(markdown: string): { text: string; mathMap: Map<string, 
     const key = `VMDMATHINLINE${counter++}END`;
     mathMap.set(key, { math, isBlock: false });
     return key;
+  });
+
+  // 5. Standalone raw LaTeX equation lines: e.g. \text{...} = \frac{...}{...} or \frac{...}{...} = ...
+  protectedText = protectedText.replace(/(^|\n)\s*(\\(?:text|frac|mathbf|mathrm)\{[^{}]+\}[^\n]*=[^\n]+)(?=\n|$)/g, (_match, prefix, math) => {
+    const key = `VMDMATHBLOCK${counter++}END`;
+    mathMap.set(key, { math, isBlock: true });
+    return `${prefix}\n\n${key}\n\n`;
   });
 
   // Restore code fences
@@ -335,6 +360,33 @@ function addTableRow(markdown: string, tableIndex: number): string {
   return markdown;
 }
 
+function extractTableMarkdown(content: string, targetTableIdx: number): string {
+  const lines = content.split(/\r?\n/);
+  let currentTable = -1;
+  let inTable = false;
+  const tableLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const isTableRow = /^\s*\|/.test(lines[i]);
+    if (isTableRow) {
+      if (!inTable) {
+        currentTable++;
+        inTable = true;
+      }
+      if (currentTable === targetTableIdx) {
+        tableLines.push(lines[i]);
+      }
+    } else {
+      if (inTable && currentTable === targetTableIdx) {
+        break;
+      }
+      inTable = false;
+    }
+  }
+
+  return tableLines.join('\n');
+}
+
 function enhanceMarkdownHtml(rawHtml: string, editableTables: Set<number>): string {
   let html = rawHtml;
 
@@ -387,6 +439,9 @@ function enhanceMarkdownHtml(rawHtml: string, editableTables: Set<number>): stri
             </span>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
+            <button type="button" class="vmd-copy-table-btn flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] text-[10px] transition-colors cursor-pointer" data-table-idx="${currentTableIdx}" title="Copy table as Markdown">
+              <span>📋 Copy</span>
+            </button>
             <button type="button" class="vmd-toggle-table-edit-btn flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-medium cursor-pointer border transition-colors ${isEditable ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-xs' : 'bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] border-[var(--border-color)]'}" data-table-idx="${currentTableIdx}" title="${isEditable ? 'Finish editing table' : 'Edit table contents and cells'}">
               <span>${isEditable ? '✓ Done' : '✎ Edit Table'}</span>
             </button>
@@ -968,6 +1023,27 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         }
         return next;
       });
+      return;
+    }
+
+    // 3b. Copy Table as Markdown Button
+    const copyTableBtn = target.closest('.vmd-copy-table-btn') as HTMLElement | null;
+    if (copyTableBtn) {
+      e.stopPropagation();
+      const tIdx = parseInt(copyTableBtn.getAttribute('data-table-idx') || '0', 10);
+      const tableMd = extractTableMarkdown(content, tIdx);
+      if (tableMd) {
+        navigator.clipboard.writeText(tableMd);
+        const originalHtml = copyTableBtn.innerHTML;
+        copyTableBtn.innerHTML = '<span>✓ Copied!</span>';
+        copyTableBtn.classList.add('bg-emerald-500/15', 'text-emerald-600');
+        setTimeout(() => {
+          if (copyTableBtn) {
+            copyTableBtn.innerHTML = originalHtml;
+            copyTableBtn.classList.remove('bg-emerald-500/15', 'text-emerald-600');
+          }
+        }, 2000);
+      }
       return;
     }
 

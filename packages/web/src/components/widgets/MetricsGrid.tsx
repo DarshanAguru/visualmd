@@ -19,14 +19,19 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({ node }) => {
         {node.items.map((item, idx) => (
           <div
             key={idx}
-            className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-3.5 shadow-xs transition-colors hover:border-[var(--text-muted)] group"
+            className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-3.5 shadow-xs transition-colors hover:border-[var(--text-muted)] group select-text"
+            title={`${item.label}: ${item.value}`}
           >
-            <div className="text-[11px] font-medium text-[var(--text-muted)] truncate mb-1">
+            <div
+              className="text-[11px] font-medium text-[var(--text-muted)] truncate mb-1"
+              title={item.label}
+            >
               {item.label}
             </div>
             <div
-              className="font-bold text-[var(--text-primary)] font-mono tracking-tight group-hover:text-blue-500 transition-colors"
+              className="font-bold text-[var(--text-primary)] font-mono tracking-tight group-hover:text-blue-500 transition-colors break-words"
               style={{ fontSize: 'calc(1.1rem * var(--vmd-font-scale, 1))' }}
+              title={item.value}
             >
               {item.value}
             </div>

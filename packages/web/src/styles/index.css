@@ -1108,23 +1108,24 @@ td.vmd-cell-annotated.vmd-note-active,
 }
 
 /* ==========================================================================
-   VisualMD Inline & Block Math Formatting (LaTeX / Subscripts)
+   VisualMD Inline & Block Math Formatting (LaTeX / KaTeX)
    ========================================================================== */
 .vmd-math {
   display: inline-flex;
   align-items: baseline;
-  padding: 0.05rem 0.35rem;
+  padding: 0.05rem 0.25rem;
   margin: 0 0.15rem;
   border-radius: 0.375rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.9em;
-  font-weight: 600;
-  color: var(--accent);
+  font-size: 0.95em;
+  color: var(--text-primary);
   background: var(--accent-surface);
   border: 1px solid var(--border-color);
-  line-height: 1.25;
+  line-height: 1.2;
   vertical-align: baseline;
-  white-space: nowrap;
+}
+
+.vmd-math .katex {
+  color: var(--text-primary) !important;
 }
 
 .vmd-math i {
@@ -1151,16 +1152,26 @@ td.vmd-cell-annotated.vmd-note-active,
 
 .vmd-math-block {
   display: block;
-  margin: 1rem 0;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  margin: 1.25rem 0;
+  padding: 0.85rem 1.25rem;
+  border-radius: 0.625rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   text-align: center;
-  font-family: 'KaTeX_Math', 'Cambria Math', 'Times New Roman', serif;
   font-size: 1.1em;
   color: var(--text-primary);
   overflow-x: auto;
+  overflow-y: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.vmd-math-block .katex-display {
+  margin: 0 !important;
+  color: var(--text-primary) !important;
+}
+
+.vmd-math-block .katex {
+  color: var(--text-primary) !important;
 }
 
 @keyframes shrink {

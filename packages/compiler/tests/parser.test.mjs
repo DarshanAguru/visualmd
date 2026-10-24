@@ -363,6 +363,44 @@ Post deployment verification notes.`;
   assert.doesNotMatch(doc.nodes[2].content, /\$STEP/);
 });
 
+test('VisualMD Compiler (v1.0.2484) - Mathematical formulas inside Stepper and Quiz nodes', () => {
+  const input = `# Basel III Capital Regulations
+
+$STEPPER$S?title=Leverage+Framework
+$STEP@1?title=Leverage+Ratio+Calculation
+The Basel III leverage ratio is computed as:
+$$\\text{Leverage Ratio (\\%)} = \\frac{\\text{Tier 1 Capital}}{\\text{Total Exposure}} \\times 100$$
+Where minimum ratio is $4.0\\%$ for D-SIBs.
+$STEPPER$E
+
+$QUIZ$S?q=What+is+the+minimum+leverage+ratio+for+D-SIBs?
+[ ] 3.0%
+[ ] 3.5%
+[x] 4.0%
+[ ] 4.5%
+$EXPLANATION
+Under RBI regulations, D-SIBs must maintain $\\text{Leverage Ratio} \\ge 4.0\\%$.
+$QUIZ$E`;
+
+  const doc = parseVisualMD(input);
+  assert.equal(doc.title, 'Basel III Capital Regulations');
+  assert.equal(doc.nodes.length, 3);
+  assert.equal(doc.nodes[0].type, 'markdown');
+  assert.equal(doc.nodes[1].type, 'stepper');
+  assert.equal(doc.nodes[2].type, 'quiz');
+
+  const stepper = doc.nodes[1];
+  assert.match(stepper.steps[0].content, /\\text\{Leverage Ratio/);
+  assert.match(stepper.steps[0].content, /\$4\.0\\%\$/);
+
+  const quiz = doc.nodes[2];
+  assert.equal(quiz.question, 'What is the minimum leverage ratio for D-SIBs?');
+  assert.equal(quiz.options.length, 4);
+  assert.equal(quiz.options[2].isCorrect, true);
+  assert.match(quiz.explanation, /\\text\{Leverage Ratio\}/);
+});
+
+
 
 
 

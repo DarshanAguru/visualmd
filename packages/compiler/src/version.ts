@@ -1,1 +1,1 @@
-export const COMPILER_VERSION = '1.0.2482';
+export const COMPILER_VERSION = '1.0.2484';

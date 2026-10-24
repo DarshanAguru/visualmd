@@ -448,13 +448,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Folders List with Nested Documents (VS Code Style) */}
         {sortedFolders.map((folder) => {
-          const isExpanded = !!expandedFolders[folder.id];
           const folderDocs = sortDocsByLatest(documents.filter((d) => d.folder_id === folder.id));
           const visibleDocs = folderDocs.filter(isDocVisible);
           const folderAssets = workspaceAssets.filter(
             (a) => a.folderId === folder.id || (a.folderName && a.folderName.toLowerCase() === folder.name.toLowerCase())
           );
           const visibleAssets = folderAssets.filter(isAssetVisible);
+
+          // Auto-expand folder when active search filter matches its contents
+          const isExpanded = searchTerm ? (visibleDocs.length > 0 || visibleAssets.length > 0) : !!expandedFolders[folder.id];
 
           // If filtering and no matches in this folder, hide folder
           if (searchTerm && visibleDocs.length === 0 && visibleAssets.length === 0) {

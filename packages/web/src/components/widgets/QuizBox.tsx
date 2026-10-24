@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { QuizNode } from '@visualmd/compiler';
 import { HelpCircle, Check, X, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { MarkdownRenderer } from '../document/MarkdownRenderer';
 
 interface QuizBoxProps {
   node: QuizNode;
@@ -107,7 +108,7 @@ export const QuizBox: React.FC<QuizBoxProps> = ({ node }) => {
               className="px-4 pb-3 leading-relaxed text-[var(--text-secondary)]"
               style={{ fontSize: 'calc(0.8125rem * var(--vmd-font-scale, 1))' }}
             >
-              {node.explanation}
+              <MarkdownRenderer content={node.explanation} />
             </div>
           )}
         </div>

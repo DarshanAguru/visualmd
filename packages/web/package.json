@@ -1,6 +1,6 @@
 {
   "name": "@visualmd/web",
-  "version": "1.0.2482",
+  "version": "1.0.2484",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,8 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/katex": "^0.16.8",
     "@visualmd/compiler": "*",
     "clsx": "^2.1.1",
+    "katex": "^0.19.1",
     "lucide-react": "^1.16.0",
     "marked": "^15.0.7",
     "react": "^19.0.0",
