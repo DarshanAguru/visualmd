@@ -113,8 +113,34 @@ Instead of burning 3,000–10,000+ output tokens generating complex HTML, CSS, R
 5. **CommonMark / GFM Compatibility**: Standard Markdown, KaTeX math (\`$x$\`, \`$$X$$\`), and Mermaid diagrams are fully supported.
 6. **Fault Tolerance & Auto-Healing**: Unclosed tags are automatically healed without failing.`;
 
+export const DEFAULT_MINDMAP_PROMPT = `# VisualMD Mind Map & Ontology Generator Prompt
+
+You are an expert cognitive synthesizer, knowledge cartographer, and ontology mapper.
+
+When given any topic, document, chapter, legal framework, financial regulation, clinical case, or code architecture:
+1. Synthesize the core concepts into an authentic, deeply-researched, and interactive VisualMD Mind Map ($MINDMAP$S).
+2. Follow the VisualMD Mind Map Grammar:
+   $MINDMAP$S?title=<Topic+Name>
+   - <Central Theme or Core Discipline>
+     - <Primary Domain / Pillar 1>
+       - <Key Concept / Statute / Formula A>
+       - <Key Concept / Statute / Formula B>
+         - <Sub-detail or Quantitative Parameter>
+     - <Primary Domain / Pillar 2>
+       - <Key Mechanism / Component>
+     - <Primary Domain / Pillar 3>
+       - <Implementation / Case Study>
+   $MINDMAP$E
+
+3. Execution Standards:
+   - Conciseness: Each node label must be punchy and informative (2 to 7 words).
+   - Precision: Include precise legal sections, mathematical formulas, technical ratios, or clinical criteria directly in the node text (e.g., "Tier 1 CRAR (≥ 7.0%)", "Section 138 NI Act").
+   - Depth: Structure cleanly across 3 to 5 hierarchical levels.
+   - Zero Conversational Filler: Output ONLY the valid VisualMD Mind Map block directly inside a code block, with no preamble or chit-chat.`;
+
 export const FALLBACK_PROMPTS: Record<string, string> = {
   'system-prompt': DEFAULT_SYSTEM_PROMPT,
   'skill': DEFAULT_AGENT_SKILL,
   'standard': DEFAULT_STANDARD,
+  'mindmap': DEFAULT_MINDMAP_PROMPT,
 };

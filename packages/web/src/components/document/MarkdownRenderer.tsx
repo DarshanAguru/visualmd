@@ -10,6 +10,8 @@ interface MarkdownRendererProps {
   annotations?: Annotation[];
   onDeleteAnnotation?: (id: string) => void;
   onUpdateContent?: (newContent: string) => void;
+  inline?: boolean;
+  className?: string;
 }
 
 function escapeRegex(string: string) {
@@ -783,6 +785,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   annotations,
   onDeleteAnnotation,
   onUpdateContent,
+  inline = false,
+  className = '',
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [editableTables, setEditableTables] = React.useState<Set<number>>(new Set());
@@ -831,14 +835,16 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     try {
       const sanitized = sanitizeMarkdownContent(content);
       const { text: mathPreprocessed, mathMap } = preprocessMath(sanitized);
-      const parsedHtml = marked.parse(mathPreprocessed, { async: false, breaks: true }) as string;
+      const parsedHtml = inline
+        ? (marked.parseInline(mathPreprocessed, { async: false }) as string)
+        : (marked.parse(mathPreprocessed, { async: false, breaks: true }) as string);
       const safeHtml = sanitizeRenderedHtml(parsedHtml);
       const withMath = restoreMath(safeHtml, mathMap);
-      return enhanceMarkdownHtml(withMath, editableTables);
+      return inline ? withMath : enhanceMarkdownHtml(withMath, editableTables);
     } catch {
-      return `<p>${escapeHtml(content)}</p>`;
+      return inline ? escapeHtml(content) : `<p>${escapeHtml(content)}</p>`;
     }
-  }, [content, editableTables]);
+  }, [content, editableTables, inline]);
 
   React.useEffect(() => {
     if (!containerRef.current) return;
@@ -1197,6 +1203,17 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       onUpdateContent(updated);
     }
   };
+
+  if (inline) {
+    return (
+      <span
+        ref={containerRef as any}
+        onClick={handleClick}
+        className={`vmd-markdown-inline ${className}`}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  }
 
   return (
     <div className="relative w-full max-w-full">

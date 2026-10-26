@@ -252,11 +252,17 @@ test('Server - Prompts API & Folders API Verification', async () => {
     const stdText = await stdRes.text();
     assert.match(stdText, /The VisualMD Specification/);
 
-    // 4. Prompts API: invalid type returns 404
+    // 4. Prompts API: mindmap
+    const mindmapRes = await fetch(`${baseUrl}/api/prompts/mindmap`);
+    assert.equal(mindmapRes.status, 200);
+    const mindmapText = await mindmapRes.text();
+    assert.match(mindmapText, /VisualMD Mind Map/);
+
+    // 5. Prompts API: invalid type returns 404
     const invalidRes = await fetch(`${baseUrl}/api/prompts/non-existent-prompt`);
     assert.equal(invalidRes.status, 404);
 
-    // 5. Folders API: create and delete
+    // 6. Folders API: create and delete
     const folderRes = await fetch(`${baseUrl}/api/folders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -634,7 +640,7 @@ test('Server - Starter tutorial bookmarks and annotations are seeded on initial 
   }
 });
 
-test('Server (v1.0.2486) - Health Version & Prefix FTS5 Search', async () => {
+test('Server (v1.0.2600000) - Health Version & Prefix FTS5 Search', async () => {
   const tmpDb = path.join(os.tmpdir(), `vmd-test-v10244-${Date.now()}.db`);
   const db = new VisualMDDatabase(tmpDb);
   const app = createServer(db);
@@ -650,7 +656,7 @@ test('Server (v1.0.2486) - Health Version & Prefix FTS5 Search', async () => {
     const healthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(healthRes.status, 200);
     const health = await healthRes.json();
-    assert.equal(health.version, '1.0.2486');
+    assert.equal(health.version, '1.0.2600000');
 
     // 2. Test prefix search in database
     db.createDocument('Distributed Consensus With Raft', 'Leader election and log replication algorithms in Raft.');
@@ -1208,7 +1214,7 @@ test('Cross-OS Compatibility - Path Traversal, Slash & Case Tolerance, and LF Bi
   );
 });
 
-test('Server (v1.0.2486) - Folder lifecycle, auto-prune immunity, foreign key integrity & crash protection', async () => {
+test('Server (v1.0.2600000) - Folder lifecycle, auto-prune immunity, foreign key integrity & crash protection', async () => {
   const tmpDb = path.join(os.tmpdir(), `vmd-fk-test-${Date.now()}.db`);
   const tmpDataDir = path.join(os.tmpdir(), `vmd-fk-dir-${Date.now()}`);
   fs.mkdirSync(tmpDataDir, { recursive: true });
@@ -1249,7 +1255,7 @@ test('Server (v1.0.2486) - Folder lifecycle, auto-prune immunity, foreign key in
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: 'Meeting Notes',
-        content: '# Meeting\nDiscussing v1.0.2486 release.',
+        content: '# Meeting\nDiscussing v1.0.2600000 release.',
         folder_id: folder.id,
       }),
     });

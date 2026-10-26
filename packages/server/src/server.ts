@@ -358,6 +358,9 @@ export function createServer(
     } else if (type === 'standard') {
       fileName = 'VisualMDStandard.md';
       contentType = 'text/markdown; charset=utf-8';
+    } else if (type === 'mindmap') {
+      fileName = 'mindmap-prompt.md';
+      contentType = 'text/markdown; charset=utf-8';
     } else if (type === 'system-prompt') {
       fileName = 'system-prompt.txt';
     } else {
@@ -940,11 +943,23 @@ export function createServer(
         const isDoc = isCompatibleDocFile(fileName);
 
         if (isDoc) {
-          const content = typeof file.content === 'string' ? file.content : '';
-          const parsed = parseVisualMD(content);
-          const title = (parsed.title && parsed.title !== 'Untitled')
+          const rawContent = typeof file.content === 'string' ? file.content : '';
+          let docContent = rawContent;
+          let parsed = parseVisualMD(docContent);
+          const fallbackTitle = fileName ? fileName.replace(/\.(vmd|md|markdown|mdown|txt|mindmap)$/i, '') : 'Untitled';
+
+          // If file is a .mindmap file without a $MINDMAP$ block, wrap into a full VisualMD document
+          if (fileName.toLowerCase().endsWith('.mindmap') && !docContent.includes('$MINDMAP$S')) {
+            const mmTitle = (parsed.title && parsed.title !== 'Untitled' && parsed.title !== 'Untitled VisualMD Document')
+              ? parsed.title
+              : fallbackTitle;
+            docContent = `# ${mmTitle}\n\n$MINDMAP$S?title=${encodeURIComponent(mmTitle)}\n${rawContent.trim()}\n$MINDMAP$E\n`;
+            parsed = parseVisualMD(docContent);
+          }
+
+          const title = (parsed.title && parsed.title !== 'Untitled' && parsed.title !== 'Untitled VisualMD Document')
             ? parsed.title
-            : (fileName ? fileName.replace(/\.(vmd|md|txt)$/i, '') : 'Untitled');
+            : fallbackTitle;
 
           let targetPath: string | null = null;
           if (targetDir) {
@@ -960,13 +975,13 @@ export function createServer(
               counter++;
             }
             try {
-              fs.writeFileSync(targetPath, content, 'utf-8');
+              fs.writeFileSync(targetPath, docContent, 'utf-8');
             } catch (err) {
               console.error('[VisualMD] Failed to write imported file to data directory:', err);
             }
           }
 
-          const doc = db.createDocument(title, content, targetFolderId, targetPath);
+          const doc = db.createDocument(title, docContent, targetFolderId, targetPath);
           importedDocs.push(doc);
         } else {
           // Supporting companion asset (Image, PDF, etc.)

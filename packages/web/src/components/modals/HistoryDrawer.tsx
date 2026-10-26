@@ -20,6 +20,9 @@ import {
   CheckCircle2,
   AlertCircle,
   FileDown,
+  Brain,
+  HelpCircle,
+  Layers,
 } from 'lucide-react';
 
 interface HistoryDrawerProps {
@@ -32,11 +35,32 @@ interface HistoryDrawerProps {
   onPreviewVersion?: (version: DocumentVersion | null) => void;
   onRestoreVersion: (versionId: string) => Promise<void>;
   onDocumentUpdated?: (updatedDoc: any) => void;
+  initialUploadType?: 'document' | 'mindmap';
+  initialTab?: 'timeline' | 'upload';
 }
 
 interface DiffLine {
   type: 'same' | 'added' | 'removed';
   text: string;
+}
+
+// Format raw text or outline into a clean VisualMD $MINDMAP$ block
+function formatMindMapBlock(rawText: string, title?: string): string {
+  const trimmed = rawText.trim();
+  if (trimmed.includes('$MINDMAP$S')) {
+    return trimmed;
+  }
+  const cleanTitle = title && title.trim() ? `?title=${encodeURIComponent(title.trim())}` : '';
+  return `$MINDMAP$S${cleanTitle}\n${trimmed}\n$MINDMAP$E`;
+}
+
+// Seamlessly replace or insert a $MINDMAP$ block inside document text
+function mergeMindMapIntoContent(currentDocText: string, mindmapBlock: string): string {
+  const mindmapRegex = /\$MINDMAP\$S[\s\S]*?\$MINDMAP\$E/;
+  if (mindmapRegex.test(currentDocText)) {
+    return currentDocText.replace(mindmapRegex, mindmapBlock);
+  }
+  return currentDocText.trimEnd() + '\n\n' + mindmapBlock + '\n';
 }
 
 // Fast prefix/suffix-optimized line diff for comparing versions
@@ -126,8 +150,11 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
   onPreviewVersion,
   onRestoreVersion,
   onDocumentUpdated,
+  initialUploadType = 'document',
+  initialTab = 'timeline',
 }) => {
-  const [activeTab, setActiveTab] = useState<'timeline' | 'upload'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'upload'>(initialTab);
+  const [uploadTargetType, setUploadTargetType] = useState<'document' | 'mindmap'>(initialUploadType);
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [loading, setLoading] = useState(false);
   const [newCheckpointSummary, setNewCheckpointSummary] = useState('');
@@ -141,7 +168,7 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
   // Resizable drawer width with persistence (min 320px, max 750px)
   const [drawerWidth, setDrawerWidth] = useState<number>(() => {
     const saved = localStorage.getItem('visualmd-history-drawer-width');
-    return saved ? Math.max(320, Math.min(750, parseInt(saved, 10))) : 420;
+    return saved ? Math.max(320, Math.min(750, parseInt(saved, 10))) : 440;
   });
   const [isResizing, setIsResizing] = useState(false);
 
@@ -211,6 +238,42 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
     }
   }, [isOpen, docId, loadVersions]);
 
+  // Sync initial props when opened
+  useEffect(() => {
+    if (isOpen) {
+      if (initialTab) setActiveTab(initialTab);
+      if (initialUploadType) {
+        setUploadTargetType(initialUploadType);
+        if (initialUploadType === 'mindmap') {
+          setActiveTab('upload');
+          setUploadSummary('Curated Dedicated Mind Map');
+        }
+      }
+    }
+  }, [isOpen, initialTab, initialUploadType]);
+
+  // Check if document already has an embedded MindMap block
+  const hasExistingMindMapInDoc = useMemo(() => {
+    return /\$MINDMAP\$S/.test(currentContent || '');
+  }, [currentContent]);
+
+  // Load existing mind map from document text into the editor
+  const handleLoadExistingMindMap = () => {
+    const match = currentContent.match(/\$MINDMAP\$S(?:\?title=([^\r\n]*))?[\r\n]+([\s\S]*?)\$MINDMAP\$E/);
+    if (match) {
+      const existingTitle = match[1] ? decodeURIComponent(match[1]) : '';
+      const existingBody = match[2].trim();
+      setUploadContent(existingBody);
+      if (existingTitle) setUploadTitle(existingTitle);
+      setUploadSummary('Refined Document Mind Map');
+      setPasteMode(true);
+      setUploadedFileName('');
+      setUploadErrorMessage(null);
+    } else {
+      setUploadErrorMessage('No $MINDMAP$ block currently found in document. You can write or paste a new one!');
+    }
+  };
+
   // Handle Manual Checkpoint Creation
   const handleCreateCheckpoint = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -256,26 +319,42 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
   // Process File Selection
   const processSelectedFile = (file: File) => {
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-    if (!['.vmd', '.md', '.markdown', '.mdown', '.txt'].includes(ext)) {
-      setUploadErrorMessage(`Please select a markdown (.vmd, .md, .markdown) file. Selected: ${file.name}`);
+    const validExts =
+      uploadTargetType === 'mindmap'
+        ? ['.mindmap']
+        : ['.vmd', '.md', '.markdown', '.mdown', '.txt'];
+
+    if (!validExts.includes(ext)) {
+      setUploadErrorMessage(
+        uploadTargetType === 'mindmap'
+          ? `Dedicated Mind Map only supports .mindmap files (.mindmap). Selected: ${file.name}. Please select a .mindmap file or edit the bullet tree directly below.`
+          : `Please select a markdown (.vmd, .md, .markdown) file. Selected: ${file.name}`
+      );
       return;
     }
 
     setUploadErrorMessage(null);
     setUploadedFileName(file.name);
-    setUploadSummary(`LLM revision via ${file.name}`);
+    if (uploadTargetType === 'mindmap') {
+      setUploadSummary(`Dedicated Mind Map via ${file.name}`);
+      const baseName = file.name.replace(/\.[^/.]+$/, '');
+      if (!uploadTitle) setUploadTitle(baseName);
+    } else {
+      setUploadSummary(`LLM revision via ${file.name}`);
+    }
 
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = (e.target?.result as string) || '';
       setUploadContent(text);
 
-      // Extract title if document begins with a heading # Title
-      const match = text.match(/^\s*#\s+([^\r\n]+)/m);
-      if (match) {
-        setUploadTitle(match[1].trim());
-      } else {
-        setUploadTitle(file.name.replace(/\.[^/.]+$/, ''));
+      if (uploadTargetType === 'document') {
+        const match = text.match(/^\s*#\s+([^\r\n]+)/m);
+        if (match) {
+          setUploadTitle(match[1].trim());
+        } else {
+          setUploadTitle(file.name.replace(/\.[^/.]+$/, ''));
+        }
       }
     };
     reader.readAsText(file);
@@ -303,7 +382,11 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!docId || !uploadContent.trim()) {
-      setUploadErrorMessage('Please provide markdown content or upload a file.');
+      setUploadErrorMessage(
+        uploadTargetType === 'mindmap'
+          ? 'Please enter or upload mind map bullet points or hierarchy.'
+          : 'Please provide markdown content or upload a file.'
+      );
       return;
     }
 
@@ -312,13 +395,31 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
     setUploadSuccessMessage(null);
 
     try {
+      let finalContentToSave = uploadContent;
+      let finalSummary = uploadSummary.trim();
+
+      if (uploadTargetType === 'mindmap') {
+        const mindmapBlock = formatMindMapBlock(
+          uploadContent,
+          uploadTitle.trim() || (docTitle ? `${docTitle} Mind Map` : 'Dedicated Mind Map')
+        );
+        finalContentToSave = mergeMindMapIntoContent(currentContent, mindmapBlock);
+        if (!finalSummary) {
+          finalSummary = `Updated Dedicated Mind Map (${uploadTitle.trim() || 'Curated'})`;
+        }
+      } else {
+        if (!finalSummary) {
+          finalSummary = 'Uploaded Revision';
+        }
+      }
+
       const res = await fetch(`/api/docs/${docId}/versions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content: uploadContent,
-          title: uploadTitle.trim() || undefined,
-          summary: uploadSummary.trim() || 'Uploaded Revision',
+          content: finalContentToSave,
+          title: uploadTargetType === 'document' ? (uploadTitle.trim() || undefined) : docTitle,
+          summary: finalSummary,
           set_as_latest: setAsLatestImmediately,
         }),
       });
@@ -326,9 +427,13 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
       if (res.ok) {
         const data = await res.json();
         setUploadSuccessMessage(
-          setAsLatestImmediately
-            ? 'Successfully uploaded and activated as latest version!'
-            : 'Successfully uploaded as revision in history for comparison!'
+          uploadTargetType === 'mindmap'
+            ? (setAsLatestImmediately
+                ? 'Dedicated Mind Map integrated & activated as latest version!'
+                : 'Dedicated Mind Map revision saved in history for comparison!')
+            : (setAsLatestImmediately
+                ? 'Successfully uploaded and activated as latest version!'
+                : 'Successfully uploaded as revision in history for comparison!')
         );
 
         if (setAsLatestImmediately && data.document && onDocumentUpdated) {
@@ -358,6 +463,37 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Draft Preview in Reader
+  const handleToggleDraftPreview = () => {
+    if (!onPreviewVersion) return;
+    if (previewVersionId === 'draft') {
+      onPreviewVersion(null);
+      return;
+    }
+
+    let draftContent = uploadContent;
+    let draftTitle = uploadTitle || docTitle || 'Draft Revision';
+
+    if (uploadTargetType === 'mindmap') {
+      const mindmapBlock = formatMindMapBlock(
+        uploadContent,
+        uploadTitle.trim() || (docTitle ? `${docTitle} Mind Map` : 'Dedicated Mind Map')
+      );
+      draftContent = mergeMindMapIntoContent(currentContent, mindmapBlock);
+      draftTitle = docTitle || 'Draft with Dedicated Mind Map';
+    }
+
+    onPreviewVersion({
+      id: 'draft',
+      doc_id: docId || '',
+      version_number: 0,
+      title: draftTitle,
+      content: draftContent,
+      summary: uploadSummary || (uploadTargetType === 'mindmap' ? 'Draft Dedicated Mind Map' : 'Uploaded LLM Draft'),
+      created_at: new Date().toISOString(),
+    });
   };
 
   // Active version for diff
@@ -526,6 +662,12 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                           ) : (
                             <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">
                               Historical Snapshot
+                            </span>
+                          )}
+                          {/\$MINDMAP\$S/.test(ver.content || '') && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center gap-1" title="Includes Dedicated Mind Map block">
+                              <Brain className="w-3 h-3" />
+                              <span>Mind Map</span>
                             </span>
                           )}
                         </div>
@@ -711,17 +853,88 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
         {/* ==================== TAB 2: UPLOAD NEW VERSION ==================== */}
         {activeTab === 'upload' && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {/* Informational Guidance */}
-            <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-1">
-              <div className="font-semibold text-indigo-400 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4" />
-                <span>Upload AI / LLM Revision</span>
+            {/* 2-Option Segmented Selector */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                Upload Target Type
+              </label>
+              <div className="grid grid-cols-2 gap-2 bg-[var(--bg-secondary)] p-1 rounded-xl border border-[var(--border-color)]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUploadTargetType('document');
+                    setUploadErrorMessage(null);
+                    if (!uploadSummary || uploadSummary.includes('Mind Map')) {
+                      setUploadSummary('');
+                    }
+                  }}
+                  className={`flex flex-col items-center justify-center p-2.5 rounded-lg text-center transition-all cursor-pointer ${
+                    uploadTargetType === 'document'
+                      ? 'bg-[var(--bg-card)] text-blue-500 shadow-sm border border-blue-500/30'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]/50'
+                  }`}
+                >
+                  <FileText className="w-4 h-4 mb-1 text-blue-500" />
+                  <span className="text-xs font-bold leading-tight">Document Revision</span>
+                  <span className="text-[10px] opacity-70">.vmd / .md markdown</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUploadTargetType('mindmap');
+                    setUploadErrorMessage(null);
+                    setPasteMode(true);
+                    if (!uploadSummary) {
+                      setUploadSummary('Curated Dedicated Mind Map');
+                    }
+                  }}
+                  className={`flex flex-col items-center justify-center p-2.5 rounded-lg text-center transition-all cursor-pointer ${
+                    uploadTargetType === 'mindmap'
+                      ? 'bg-[var(--bg-card)] text-purple-400 shadow-sm border border-purple-500/30'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]/50'
+                  }`}
+                >
+                  <Brain className="w-4 h-4 mb-1 text-purple-400" />
+                  <span className="text-xs font-bold leading-tight">Dedicated Mind Map</span>
+                  <span className="text-[10px] opacity-70">$MINDMAP$ block</span>
+                </button>
               </div>
-              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
-                Got a rewritten or improved markdown document from an LLM (Claude, ChatGPT, Gemini)? Upload it here.
-                You can set it as active immediately, or keep both versions in history to compare side-by-side!
-              </p>
             </div>
+
+            {/* Informational Guidance */}
+            {uploadTargetType === 'document' ? (
+              <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs space-y-1">
+                <div className="font-semibold text-blue-400 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4" />
+                  <span>Full Document Revision (LLM / Markdown)</span>
+                </div>
+                <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                  Upload an updated markdown document from Claude, ChatGPT, or Gemini. VisualMD preserves prior snapshots so you can compare changes side-by-side or rollback anytime.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs space-y-2">
+                <div className="font-semibold text-purple-300 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Brain className="w-4 h-4" />
+                    <span>Dedicated Document Mind Map ($MINDMAP$)</span>
+                  </div>
+                  {hasExistingMindMapInDoc && (
+                    <button
+                      type="button"
+                      onClick={handleLoadExistingMindMap}
+                      className="px-2 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-[10px] font-semibold transition-colors cursor-pointer"
+                    >
+                      Load Current Map
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                  Upload or paste a curated Mind Map hierarchy for this document. It is stored directly within your document as a native <code className="px-1 py-0.5 rounded bg-[var(--bg-card)] text-purple-300 font-mono text-[10px]">$MINDMAP$</code> block, keeping all text intact while powering the visual Mind Map view.
+                </p>
+              </div>
+            )}
 
             {/* Error or Success Alerts */}
             {uploadErrorMessage && (
@@ -747,10 +960,12 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
                   isDragging
-                    ? 'border-indigo-500 bg-indigo-500/10 scale-[1.01]'
+                    ? uploadTargetType === 'mindmap'
+                      ? 'border-purple-500 bg-purple-500/10 scale-[1.01]'
+                      : 'border-blue-500 bg-blue-500/10 scale-[1.01]'
                     : uploadContent
                     ? 'border-emerald-500/40 bg-emerald-500/5'
-                    : 'border-[var(--border-color)] hover:border-indigo-500/50 bg-[var(--bg-secondary)]/50'
+                    : 'border-[var(--border-color)] hover:border-purple-500/50 bg-[var(--bg-secondary)]/50'
                 }`}
               >
                 <input
@@ -761,7 +976,7 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                       processSelectedFile(e.target.files[0]);
                     }
                   }}
-                  accept=".md,.vmd,.markdown,.mdown,.txt"
+                  accept={uploadTargetType === 'mindmap' ? '.mindmap' : '.vmd,.md,.markdown,.mdown,.txt'}
                   className="hidden"
                 />
 
@@ -782,15 +997,21 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="w-10 h-10 rounded-full bg-indigo-500/15 text-indigo-400 flex items-center justify-center mx-auto">
-                      <FileUp className="w-5 h-5" />
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto ${
+                      uploadTargetType === 'mindmap' ? 'bg-purple-500/15 text-purple-400' : 'bg-blue-500/15 text-blue-400'
+                    }`}>
+                      {uploadTargetType === 'mindmap' ? <Brain className="w-5 h-5" /> : <FileUp className="w-5 h-5" />}
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-[var(--text-primary)]">
-                        Drop your .md or .vmd file here, or click to browse
+                        {uploadTargetType === 'mindmap'
+                          ? 'Drop your .mindmap file here, or click to browse'
+                          : 'Drop your .md or .vmd file here, or click to browse'}
                       </p>
                       <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                        Supports VisualMD (.vmd) and Standard Markdown (.md)
+                        {uploadTargetType === 'mindmap'
+                          ? 'Dedicated Mind Map format (.mindmap) only'
+                          : 'Supports VisualMD (.vmd) and Standard Markdown (.md)'}
                       </p>
                     </div>
                   </div>
@@ -804,7 +1025,13 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                   onClick={() => setPasteMode(!pasteMode)}
                   className="text-xs text-blue-500 hover:text-blue-400 font-medium flex items-center gap-1 cursor-pointer"
                 >
-                  <span>{pasteMode ? 'Hide Markdown Text Editor' : 'Or paste LLM markdown directly as text'}</span>
+                  <span>
+                    {pasteMode
+                      ? 'Hide Direct Text Editor'
+                      : uploadTargetType === 'mindmap'
+                      ? 'Or paste / edit Mind Map bullet points directly'
+                      : 'Or paste LLM markdown directly as text'}
+                  </span>
                 </button>
 
                 {pasteMode && (
@@ -813,48 +1040,50 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                       value={uploadContent}
                       onChange={(e) => {
                         setUploadContent(e.target.value);
-                        if (!uploadSummary) setUploadSummary('Pasted LLM revision');
+                        if (!uploadSummary) {
+                          setUploadSummary(uploadTargetType === 'mindmap' ? 'Curated Mind Map hierarchy' : 'Pasted LLM revision');
+                        }
                       }}
-                      rows={8}
-                      placeholder="Paste your updated markdown from Claude, ChatGPT, or Gemini here..."
+                      rows={uploadTargetType === 'mindmap' ? 9 : 8}
+                      placeholder={
+                        uploadTargetType === 'mindmap'
+                          ? `- Main Subject\n  - Core Concept 1\n    - Key Takeaway A\n    - Key Takeaway B\n  - Core Concept 2\n    - Important Step\n    - Metric Target`
+                          : 'Paste your updated markdown from Claude, ChatGPT, or Gemini here...'
+                      }
                       className="w-full p-3 text-xs font-mono rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-blue-500 leading-relaxed"
                     />
+                    {uploadTargetType === 'mindmap' && (
+                      <p className="text-[10px] text-[var(--text-muted)] font-mono">
+                        Tip: Standard indented bullets (<code className="text-purple-400">-</code> or <code className="text-purple-400">*</code>) are auto-formatted into a complete <code className="text-purple-400">$MINDMAP$</code> block.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Draft Preview in Reader Trigger */}
               {uploadContent.trim() && (
-                <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-between animate-in fade-in">
+                <div className={`p-3 rounded-xl border flex items-center justify-between animate-in fade-in ${
+                  uploadTargetType === 'mindmap'
+                    ? 'bg-purple-500/10 border-purple-500/20'
+                    : 'bg-indigo-500/10 border-indigo-500/20'
+                }`}>
                   <div className="text-xs">
-                    <div className="font-semibold text-indigo-400 flex items-center gap-1.5">
+                    <div className={`font-semibold flex items-center gap-1.5 ${
+                      uploadTargetType === 'mindmap' ? 'text-purple-300' : 'text-indigo-400'
+                    }`}>
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>Ready to Preview Draft</span>
                     </div>
                     <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                      View this LLM draft rendered in the reader
+                      {uploadTargetType === 'mindmap'
+                        ? 'Preview document with this mind map integrated'
+                        : 'View this LLM draft rendered in the reader'}
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (onPreviewVersion) {
-                        const isDraftActive = previewVersionId === 'draft';
-                        onPreviewVersion(
-                          isDraftActive
-                            ? null
-                            : {
-                                id: 'draft',
-                                doc_id: docId || '',
-                                version_number: 0,
-                                title: uploadTitle || docTitle || 'Draft Revision',
-                                content: uploadContent,
-                                summary: uploadSummary || 'Uploaded LLM Draft',
-                                created_at: new Date().toISOString(),
-                              }
-                        );
-                      }
-                    }}
+                    onClick={handleToggleDraftPreview}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                       previewVersionId === 'draft'
                         ? 'bg-amber-500 text-white shadow-xs'
@@ -876,21 +1105,30 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                   type="text"
                   value={uploadSummary}
                   onChange={(e) => setUploadSummary(e.target.value)}
-                  placeholder="e.g., Claude 3.7 refactor: added examples"
+                  placeholder={
+                    uploadTargetType === 'mindmap'
+                      ? 'e.g., Curated Mind Map: Architecture & Core Formulas'
+                      : 'e.g., Claude 3.7 refactor: added examples'
+                  }
                   className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
                 />
               </div>
 
-              {/* Document Title (Optional) */}
+              {/* Title Input */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-[var(--text-primary)]">
-                  Document Title <span className="text-[var(--text-muted)] font-normal">(optional)</span>
+                  {uploadTargetType === 'mindmap' ? 'Mind Map Title / Topic' : 'Document Title'}{' '}
+                  <span className="text-[var(--text-muted)] font-normal">(optional)</span>
                 </label>
                 <input
                   type="text"
                   value={uploadTitle}
                   onChange={(e) => setUploadTitle(e.target.value)}
-                  placeholder={docTitle || 'Document Title'}
+                  placeholder={
+                    uploadTargetType === 'mindmap'
+                      ? (docTitle ? `${docTitle} Mind Map` : 'Curated Mind Map')
+                      : (docTitle || 'Document Title')
+                  }
                   className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -920,12 +1158,20 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                 <button
                   type="submit"
                   disabled={isUploading || !uploadContent.trim()}
-                  className="flex-1 py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
+                  className={`flex-1 py-2 px-4 rounded-lg disabled:opacity-50 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm ${
+                    uploadTargetType === 'mindmap'
+                      ? 'bg-purple-600 hover:bg-purple-500'
+                      : 'bg-blue-600 hover:bg-blue-500'
+                  }`}
                 >
                   <UploadCloud className="w-4 h-4" />
                   <span>
                     {isUploading
                       ? 'Saving Revision...'
+                      : uploadTargetType === 'mindmap'
+                      ? setAsLatestImmediately
+                        ? 'Save Mind Map as Latest'
+                        : 'Save Mind Map in History'
                       : setAsLatestImmediately
                       ? 'Upload & Set as Latest'
                       : 'Upload as Version in History'}

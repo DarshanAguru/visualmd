@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseVisualMD, validateVisualMD } from '../dist/index.js';
+import {
+  parseVisualMD,
+  validateVisualMD,
+  buildDocumentMindMap,
+  autoHealVisualMD,
+  parseMindMapFile,
+  parseBulletTree,
+  VisualMDParseError,
+  VisualMDValidationError,
+  COMPILER_VERSION,
+} from '../dist/index.js';
 
 test('VisualMD Compiler - Standard Markdown and Title', () => {
   const input = `# Distributed Consensus
@@ -418,6 +428,368 @@ And standalone raw equation:
   assert.equal(doc.nodes[0].type, 'markdown');
   assert.match(doc.nodes[0].content, /\\text\{FC\} = \|\\text\{Net P&L on Trading Book\}\|/);
 });
+
+test('VisualMD Compiler (v1.0.2488) - MindMap Node Parsing with Hierarchical Bullet Trees', () => {
+  const input = `# Computer Architecture
+$MINDMAP$S?title=Memory+Hierarchy
+- Memory Hierarchy
+  - L1 Cache
+    - Instruction Cache
+    - Data Cache
+  - L2 Cache
+    - Unified 512KB
+  - L3 Cache
+    - Shared LLC
+  - Main Memory (DRAM)
+$MINDMAP$E`;
+
+  const doc = parseVisualMD(input);
+  assert.equal(doc.title, 'Computer Architecture');
+  assert.equal(doc.nodes.length, 2);
+  assert.equal(doc.nodes[0].type, 'markdown');
+  assert.equal(doc.nodes[1].type, 'mindmap');
+
+  const mm = doc.nodes[1];
+  assert.equal(mm.title, 'Memory Hierarchy');
+  assert.equal(mm.root.text, 'Memory Hierarchy');
+  assert.equal(mm.root.children.length, 4);
+  assert.equal(mm.root.children[0].text, 'L1 Cache');
+  assert.equal(mm.root.children[0].children.length, 2);
+  assert.equal(mm.root.children[0].children[0].text, 'Instruction Cache');
+  assert.equal(mm.root.children[3].text, 'Main Memory (DRAM)');
+});
+
+test('VisualMD Compiler (v1.0.2488) - buildDocumentMindMap generates full document tree', () => {
+  const input = `# Deep Learning Fundamentals
+## Neural Network Basics
+Introduction to perceptrons and feedforward networks.
+
+### Activation Functions
+ReLU, GELU, and Sigmoid functions.
+
+$STEPPER$S?title=Backpropagation+Flow
+$STEP@1?title=Forward+Pass
+Compute activations layer by layer.
+$STEP@2?title=Loss+Calculation
+Compute cross-entropy loss.
+$STEPPER$E
+
+## Transformer Architecture
+Attention mechanisms and self-attention layers.`;
+
+  const doc = parseVisualMD(input);
+  const mindMap = buildDocumentMindMap(doc);
+
+  assert.equal(mindMap.text, 'Deep Learning Fundamentals');
+  assert.ok(mindMap.children.length >= 2);
+  assert.equal(mindMap.children[0].text, 'Neural Network Basics');
+  assert.ok(mindMap.children[0].children.some((c) => c.text === 'Activation Functions'));
+  const activationNode = mindMap.children[0].children.find((c) => c.text === 'Activation Functions');
+  assert.ok(activationNode?.children?.some((c) => c.text.includes('Backpropagation Flow')));
+  assert.equal(mindMap.children[1].text, 'Transformer Architecture');
+});
+
+test('VisualMD Compiler (v1.0.2488) - autoHealVisualMD repairs unclosed tags & aliases', () => {
+  const malformed = `# Quantum Computing
+$SNIPPET$START?lang=python
+import qiskit
+circuit = QuantumCircuit(2)
+
+## Next Section
+$STEPPER$S?title=Quantum+Teleportation
+$STEP@1?title=Entangle+Bell+State
+Prepare pair.`;
+
+  const healed = autoHealVisualMD(malformed);
+  assert.match(healed, /\$SNIPPET\$E/);
+  assert.match(healed, /\$STEPPER\$E/);
+
+  const doc = parseVisualMD(healed);
+  assert.equal(doc.title, 'Quantum Computing');
+  assert.equal(doc.nodes.length, 4);
+  assert.equal(doc.nodes[0].type, 'markdown');
+  assert.equal(doc.nodes[1].type, 'snippet');
+  assert.equal(doc.nodes[2].type, 'markdown');
+  assert.equal(doc.nodes[3].type, 'stepper');
+});
+
+test('VisualMD Compiler (v1.0.2488) - parseMindMapFile with bullet outline and JSON', () => {
+  // Test 1: Plain bullet tree with title
+  const bulletInput = `# Distributed Systems
+- Consensus Protocols [badge: Core] [summary: Guarantees agreement across replicas]
+  - Raft [summary: Leader election and log replication]
+  - Paxos [badge: Foundational]
+- Storage Engines [badge: Persistence]
+  - LSM-Trees [type: concept] [summary: Write-optimized log structured merge trees]
+  - B+ Trees [summary: Read-optimized balanced search trees]`;
+
+  const parsedBullet = parseMindMapFile(bulletInput);
+  assert.equal(parsedBullet.title, 'Distributed Systems');
+  assert.equal(parsedBullet.root.text, 'Distributed Systems');
+  assert.equal(parsedBullet.root.children.length, 2);
+  assert.equal(parsedBullet.root.children[0].text, 'Consensus Protocols');
+  assert.equal(parsedBullet.root.children[0].badge, 'Core');
+  assert.equal(parsedBullet.root.children[0].summary, 'Guarantees agreement across replicas');
+  assert.equal(parsedBullet.root.children[0].children[0].text, 'Raft');
+  assert.match(parsedBullet.vmdContent, /\$MINDMAP\$S\?title=Distributed%20Systems/);
+
+  // Test 2: JSON mindmap
+  const jsonInput = JSON.stringify({
+    title: 'Operating Systems',
+    root: {
+      text: 'Operating Systems',
+      type: 'root',
+      children: [
+        { text: 'Process Management', badge: 'Kernel' },
+        { text: 'Memory Management', summary: 'Virtual memory and paging' },
+      ],
+    },
+  });
+
+  const parsedJson = parseMindMapFile(jsonInput);
+  assert.equal(parsedJson.title, 'Operating Systems');
+  assert.equal(parsedJson.root.children.length, 2);
+  assert.equal(parsedJson.root.children[0].badge, 'Kernel');
+  assert.equal(parsedJson.root.children[1].summary, 'Virtual memory and paging');
+});
+
+test('VisualMD Compiler (v1.0.2488) - buildDocumentMindMap comprehensive concept extraction', () => {
+  const docText = `# Artificial Intelligence Masterclass
+
+Machine learning models learn patterns from empirical training distributions.
+
+## Supervised Learning
+Supervised learning uses labeled training pairs.
+
+- Regression: Predicting continuous values.
+  - Linear Regression: Minimizes sum of squared errors.
+  - Ridge Regression [badge: L2]: Adds squared weight penalty.
+- Classification: Categorizing into discrete classes.
+  - Support Vector Machines: Maximizes margin width.
+  - Decision Trees: Greedy recursive binary splitting.
+
+Key objective equation:
+$$L(\\theta) = \\frac{1}{N} \\sum_{i=1}^N (y_i - f(x_i))^2$$
+
+> Regularization prevents catastrophic overfitting on noise.
+
+**Gradient Descent**: First-order iterative optimization algorithm.
+
+$SNIPPET$S?lang=python&title=Train+Loop
+loss.backward()
+optimizer.step()
+$SNIPPET$E
+
+$TABS$S
+$TAB?title=CPU
+High single-core performance.
+$TAB?title=GPU
+Massively parallel tensor throughput.
+$TABS$E`;
+
+  const doc = parseVisualMD(docText);
+  const mm = buildDocumentMindMap(doc);
+
+  assert.equal(mm.text, 'Artificial Intelligence Masterclass');
+  const supLearning = mm.children.find((c) => c.text === 'Supervised Learning');
+  assert.ok(supLearning, 'Supervised Learning heading should exist');
+
+  // Verify nested bullets
+  const regression = supLearning.children.find((c) => c.text === 'Regression');
+  assert.ok(regression, 'Regression concept should be extracted');
+  assert.equal(regression.summary, 'Predicting continuous values.');
+  assert.ok(regression.children.length >= 2, 'Regression should contain nested children');
+  assert.equal(regression.children[0].text, 'Linear Regression');
+  assert.equal(regression.children[1].badge, 'L2');
+
+  // Verify formula extraction
+  const formulaNode = supLearning.children.find((c) => c.type === 'formula');
+  assert.ok(formulaNode, 'Formula node should be extracted');
+  assert.equal(formulaNode.badge, 'Formula');
+
+  // Verify quote extraction
+  const quoteNode = supLearning.children.find((c) => c.badge === 'Takeaway');
+  assert.ok(quoteNode, 'Quote takeaway should be extracted');
+
+  // Verify paragraph definition extraction
+  const defNode = supLearning.children.find((c) => c.text === 'Gradient Descent');
+  assert.ok(defNode, 'Gradient Descent definition should be extracted');
+
+  // Verify snippet & tabs extraction
+  const snippetNode = supLearning.children.find((c) => c.type === 'snippet');
+  assert.ok(snippetNode, 'Snippet node should be extracted');
+
+  const tabsNode = supLearning.children.find((c) => c.badge?.includes('Tabs'));
+  assert.ok(tabsNode, 'Tabs node should be extracted');
+  assert.equal(tabsNode.children.length, 2);
+});
+
+test('VisualMD Compiler (v1.0.2488) - Truncated Stream Auto-Healing for Code Fences, Math, and Macros', () => {
+  // Truncated during LLM streaming: unclosed code fence
+  const streamedCode = `# Streaming Code Test
+Here is some code:
+\`\`\`typescript
+const client = new VisualMDClient();
+// stream abruptly ended`;
+
+  const healedCode = autoHealVisualMD(streamedCode);
+  assert.match(healedCode, /```$/);
+
+  // Truncated during math formula: unclosed math block ($$)
+  const streamedMath = `# Streaming Math Test
+Let the loss function be:
+$$\\sum_{i=0}^n x_i^2`;
+
+  const healedMath = autoHealVisualMD(streamedMath);
+  assert.match(healedMath, /\$\$$/);
+
+  // Truncated during macro streaming: unclosed $MINDMAP$S
+  const streamedMacro = `# Live MindMap Stream
+$MINDMAP$S?title=LLM+Reasoning
+- Root Concept
+  - Chain of Thought
+  - Tree of Thoughts`;
+
+  const parsedMacro = parseVisualMD(streamedMacro, { autoHeal: true });
+  assert.equal(parsedMacro.title, 'Live MindMap Stream');
+  const mmNode = parsedMacro.nodes.find((n) => n.type === 'mindmap');
+  assert.ok(mmNode, 'MindMap node should be successfully healed and parsed');
+  assert.equal(mmNode.title, 'LLM Reasoning');
+  assert.equal(mmNode.root.children.length, 1);
+  assert.equal(mmNode.root.children[0].text, 'Root Concept');
+  assert.equal(mmNode.root.children[0].children.length, 2);
+  assert.equal(mmNode.root.children[0].children[0].text, 'Chain of Thought');
+});
+
+test('VisualMD Compiler (v1.0.2488) - Strict Mode vs Resilient Default Mode', () => {
+  const unclosedDoc = `# Broken Document
+$STEPPER$S?title=Incomplete+Workflow
+$STEP@1?title=Step+One
+Content`;
+
+  // Default mode: auto-heals without throwing
+  const defaultDoc = parseVisualMD(unclosedDoc);
+  assert.equal(defaultDoc.title, 'Broken Document');
+  assert.ok(defaultDoc.nodes.some((n) => n.type === 'stepper'));
+
+  // Strict mode: throws VisualMDValidationError
+  assert.throws(
+    () => {
+      parseVisualMD(unclosedDoc, { strict: true });
+    },
+    (err) => {
+      assert.ok(err instanceof VisualMDValidationError);
+      assert.ok(err.unclosedTags.includes('$STEPPER$S'));
+      return true;
+    }
+  );
+
+  // Strict mode with non-string input: throws VisualMDParseError
+  assert.throws(
+    () => {
+      parseVisualMD(12345, { strict: true });
+    },
+    (err) => {
+      assert.ok(err instanceof VisualMDParseError);
+      assert.equal(err.name, 'VisualMDParseError');
+      return true;
+    }
+  );
+
+  // Default mode with non-string input: safely converts to string
+  const safeDoc = parseVisualMD(null);
+  assert.equal(typeof safeDoc.title, 'string');
+  assert.equal(Array.isArray(safeDoc.nodes), true);
+});
+
+test('VisualMD Compiler (v1.0.2600000) - Version and Canvas AST Payload Compatibility', () => {
+  assert.equal(COMPILER_VERSION, '1.0.2600000');
+
+  const richDoc = `# Full System Overview
+$CALLOUT$S?type=insight&title=Core+Principle
+Eventual consistency is sufficient for telemetry.
+$CALLOUT$E
+
+$METRICS$S
+Latency: 12ms | Throughput: 450k/sec | Uptime: 99.99%
+$METRICS$E
+
+$SNIPPET$S?lang=typescript&title=Handler.ts
+export function handle(req: Request) { return new Response(); }
+$SNIPPET$E
+
+$QUIZ$S?q=Is+VisualMD+canvas+embeddable?
+[x] Yes, in React, Angular, Vue, and HTML
+[ ] No, it only runs on the local server
+$EXPLANATION
+VisualMD v1.0.2600000 provides first-class embeddable canvas components.
+$QUIZ$E`;
+
+  const doc = parseVisualMD(richDoc);
+  assert.equal(doc.title, 'Full System Overview');
+  assert.equal(doc.nodes.length, 5);
+
+  // Verify node payload structure consumed by <VisualMDCanvas />
+  const [header, callout, metrics, snippet, quiz] = doc.nodes;
+  assert.equal(header.type, 'markdown');
+  assert.equal(callout.type, 'callout');
+  assert.equal(metrics.type, 'metrics');
+  assert.equal(snippet.type, 'snippet');
+  assert.equal(quiz.type, 'quiz');
+});
+
+test('VisualMD Compiler (v1.0.2600000) - MindMap Heading and Section Non-Blank Description Guarantee', () => {
+  const input = `# Master System Design
+## Core Architecture: Event Sourcing & CQRS
+Event sourcing stores all state changes as an immutable sequence of events.
+
+## Storage Layer
+- RocksDB: Embedded key-value store for fast SSD I/O.
+- Kafka: Distributed event streaming log.
+
+## Ingestion Pipeline [badge: Ingest] [summary: High throughput WebSocket and gRPC gateway]
+$STEPPER$S?title=Data+Flow
+$STEP@1?title=Packet+Received
+Validates auth headers.
+$STEPPER$E
+
+## Empty Section Heading Without Direct Paragraph
+### Sub-Concept Alpha
+Alpha implementation details.`;
+
+  const doc = parseVisualMD(input);
+  const mm = buildDocumentMindMap(doc);
+
+  assert.equal(mm.text, 'Master System Design');
+  assert.ok(mm.children.length >= 4);
+
+  // 1. Heading with colon definition and following paragraph description
+  const archHeading = mm.children.find((c) => c.text === 'Core Architecture');
+  assert.ok(archHeading, 'Core Architecture heading must exist');
+  assert.match(archHeading.summary, /Event Sourcing & CQRS/);
+  assert.match(archHeading.summary, /immutable sequence of events/);
+
+  // 2. Heading with list only (synthesized summary)
+  const storageHeading = mm.children.find((c) => c.text === 'Storage Layer');
+  assert.ok(storageHeading, 'Storage Layer heading must exist');
+  assert.ok(storageHeading.summary, 'Storage Layer must have non-blank summary');
+  assert.match(storageHeading.summary, /RocksDB|Kafka|topic|Section/i);
+
+  // 3. Heading with explicit inline [summary: ...] tag
+  const ingestHeading = mm.children.find((c) => c.text === 'Ingestion Pipeline');
+  assert.ok(ingestHeading, 'Ingestion Pipeline heading must exist');
+  assert.equal(ingestHeading.summary, 'High throughput WebSocket and gRPC gateway');
+  assert.equal(ingestHeading.badge, 'Ingest');
+
+  // 4. Heading without direct paragraph or explicit tag (synthesized summary)
+  const emptyHeading = mm.children.find((c) => c.text === 'Empty Section Heading Without Direct Paragraph');
+  assert.ok(emptyHeading, 'Empty heading must exist');
+  assert.ok(emptyHeading.summary, 'Empty heading must have non-blank summary');
+  assert.match(emptyHeading.summary, /Sub-Concept Alpha|Section/i);
+});
+
+
+
 
 
 

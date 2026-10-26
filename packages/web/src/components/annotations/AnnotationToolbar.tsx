@@ -37,6 +37,23 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
       const text = selection.toString().trim();
       if (text.length < 2) return;
 
+      // Check if selection is within a Mind Map, modal, or element explicitly disabling annotations
+      let testElem: Node | null = selection.anchorNode;
+      while (testElem && testElem !== document.body) {
+        if (testElem instanceof HTMLElement) {
+          if (
+            testElem.hasAttribute('data-no-annotation') ||
+            testElem.hasAttribute('data-mindmap-canvas') ||
+            testElem.classList.contains('mindmap-modal') ||
+            testElem.tagName === 'DIALOG'
+          ) {
+            setPosition(null);
+            return;
+          }
+        }
+        testElem = testElem.parentNode;
+      }
+
       // Find closest node container with [data-node-id]
       let curr: Node | null = selection.anchorNode;
       let nodeContainer: HTMLElement | null = null;
@@ -46,6 +63,12 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           break;
         }
         curr = curr.parentNode;
+      }
+
+      // Annotations are only applicable within document markdown content nodes
+      if (!nodeContainer) {
+        setPosition(null);
+        return;
       }
 
       const range = selection.getRangeAt(0);

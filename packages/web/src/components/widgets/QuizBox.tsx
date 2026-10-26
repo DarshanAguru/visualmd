@@ -23,9 +23,10 @@ export const QuizBox: React.FC<QuizBoxProps> = ({ node }) => {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-color)]">
         <div className="flex items-center gap-2">
-          <HelpCircle className="w-4 h-4 text-emerald-500" />
+          <HelpCircle className="w-4 h-4 text-emerald-500 shrink-0" />
           <h4 className="font-semibold text-[var(--text-primary)]" style={{ fontSize: 'calc(0.9375rem * var(--vmd-font-scale, 1))' }}>
-            Knowledge Check: {node.question}
+            Knowledge Check:{' '}
+            <MarkdownRenderer inline content={node.question} />
           </h4>
         </div>
         {hasAnswered && (
@@ -68,11 +69,13 @@ export const QuizBox: React.FC<QuizBoxProps> = ({ node }) => {
               style={{ fontSize: 'calc(0.875rem * var(--vmd-font-scale, 1))' }}
               className={`w-full flex items-center justify-between p-3 rounded-lg border text-left transition-colors ${btnStyle}`}
             >
-              <div className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-full border border-current flex items-center justify-center text-[10px] font-mono select-none">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-5 h-5 rounded-full border border-current flex items-center justify-center text-[10px] font-mono select-none shrink-0">
                   {String.fromCharCode(65 + idx)}
                 </span>
-                <span>{option.text}</span>
+                <span className="truncate">
+                  <MarkdownRenderer inline content={option.text} />
+                </span>
               </div>
 
               {hasAnswered && (

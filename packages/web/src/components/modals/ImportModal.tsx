@@ -195,7 +195,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               id="file-upload-input"
               type="file"
               multiple
-              accept=".md,.vmd,.markdown,.txt,.pdf,.png,.jpg,.jpeg,.gif,.svg,.webp,.avif,.bmp,.ico"
+              accept=".md,.vmd,.markdown,.mindmap,.txt,.pdf,.png,.jpg,.jpeg,.gif,.svg,.webp,.avif,.bmp,.ico"
               className="hidden"
               onChange={(e) => handleFiles(e.target.files)}
             />
@@ -204,7 +204,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               Click to browse or drag & drop files here
             </p>
             <p className="text-[11px] text-[var(--text-muted)] mt-1">
-              Markdown (.vmd, .md), Documents (.pdf), & Images (.png, .jpg, .svg...)
+              Markdown (.vmd, .md), Mind Maps (.mindmap), Documents (.pdf), & Images (.png, .jpg...)
             </p>
             <p className="text-[10px] text-[var(--text-muted)]/80 mt-1 font-mono">
               {selectedFolderId

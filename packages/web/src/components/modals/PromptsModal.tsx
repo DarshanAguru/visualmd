@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Bot, Copy, Check, Download, Sparkles, X } from 'lucide-react';
+import { Bot, Copy, Check, Download, Sparkles, X, Brain } from 'lucide-react';
 import { FALLBACK_PROMPTS } from './promptDefaults';
 
 interface PromptsModalProps {
@@ -8,7 +8,7 @@ interface PromptsModalProps {
   onClose: () => void;
 }
 
-type PromptTab = 'system-prompt' | 'skill' | 'standard';
+type PromptTab = 'system-prompt' | 'skill' | 'standard' | 'mindmap';
 
 export const PromptsModal: React.FC<PromptsModalProps> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<PromptTab>('system-prompt');
@@ -114,6 +114,17 @@ export const PromptsModal: React.FC<PromptsModalProps> = ({ isOpen, onClose }) =
               }`}
             >
               3. Full Standard (VisualMDStandard.md)
+            </button>
+            <button
+              onClick={() => handleTabChange('mindmap')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                activeTab === 'mindmap'
+                  ? 'bg-purple-600 text-white font-semibold shadow-xs'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+              }`}
+            >
+              <Brain className="w-3.5 h-3.5 text-purple-400" />
+              <span>4. Mind Map Generator</span>
             </button>
           </div>
 

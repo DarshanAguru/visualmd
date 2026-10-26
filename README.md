@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: >=22](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
-[![Version: v1.0.2486](https://img.shields.io/badge/Version-v1.0.2486-purple.svg)](SECURITY)
+[![Version: v1.0.2600000](https://img.shields.io/badge/Version-v1.0.2600000-purple.svg)](SECURITY)
 ---
 
 ## ⚡ Why VisualMD?
@@ -77,6 +77,271 @@ cd visualmd
 npm install
 npm link
 ```
+
+---
+
+## 📦 Programmatic SDK & Agentic AI Integration
+
+VisualMD is not just a workspace application—it is also a **high-performance, battle-tested programmatic SDK** designed for engineers building AI agents, LLM pipelines, autonomous coding assistants, and educational platforms.
+
+If your LLM produces structured output or streaming markdown, you can install VisualMD directly into your Node.js or TypeScript backend without running the server UI.
+
+### Installation
+
+```bash
+npm install visualmd
+```
+
+### Quick API Examples
+
+```typescript
+import {
+  parseVisualMD,
+  buildDocumentMindMap,
+  autoHealVisualMD,
+  parseMindMapFile,
+  validateVisualMD,
+  VisualMDParseError,
+  VisualMDValidationError
+} from 'visualmd';
+
+// 1. Parse VisualMD or Standard Markdown into AST
+const doc = parseVisualMD(`
+# System Architecture
+$STEPPER$S?title=Distributed+Commit
+$STEP@1?title=Prepare
+Coordinator asks replicas to prepare.
+$STEP@2?title=Commit
+Coordinator sends commit message upon unanimous votes.
+$STEPPER$E
+`);
+
+console.log(doc.title); // "System Architecture"
+console.log(doc.nodes.length); // 2 (markdown + stepper)
+
+// 2. Extract Complete Hierarchical Mind Map from Any Document
+const mindMap = buildDocumentMindMap(doc);
+console.log(mindMap.text); // "System Architecture"
+console.log(mindMap.children); // Headings, steppers, concepts, formulas & definitions
+
+// 3. Auto-Heal Truncated LLM Streaming Chunks
+// Safely closes unclosed code blocks, math formulas, and macro tags mid-stream
+const rawStream = `# Quantum Logic\n\`\`\`python\ncircuit = QuantumCircuit(2)`;
+const safeStream = autoHealVisualMD(rawStream);
+// Output automatically appends \`\`\` so renderers never crash!
+
+// 4. Parse Standalone .mindmap Files (Bullets, Mermaid, or JSON)
+const mindMapDoc = parseMindMapFile(`
+# Distributed Storage
+- Consensus Protocols [badge: Core]
+  - Raft [summary: Leader election & log replication]
+  - Paxos
+- Storage Engines
+  - LSM Trees: Write-optimized log structured merge trees
+  - B+ Trees: Read-optimized balanced search trees
+`);
+
+// 5. Strict Validation for Automated CI/CD Pipelines
+try {
+  parseVisualMD(inputString, { strict: true });
+} catch (err) {
+  if (err instanceof VisualMDValidationError) {
+    console.error('Unclosed tags found:', err.unclosedTags);
+  } else if (err instanceof VisualMDParseError) {
+    console.error('Parse diagnostics:', err.diagnostics);
+  }
+}
+```
+
+### Agentic AI Framework Compatibility
+VisualMD SDK works out-of-the-box in:
+- **Google Antigravity & Gemini SDK** (`@google/genai`)
+- **LangChain & LangGraph** (`@langchain/core`)
+- **LlamaIndex** (`llamaindex`)
+- **AutoGen & CrewAI**
+- **Vercel AI SDK** (`ai`)
+
+For standalone `.mindmap` structure and AI prompts, consult:
+- **[`docs/MINDMAP_SPECIFICATION.md`](docs/MINDMAP_SPECIFICATION.md)** — Specification for `.mindmap` and `$MINDMAP$` blocks.
+- **[`prompts/mindmap-prompt.md`](prompts/mindmap-prompt.md)** — Master generation prompt for standalone and embedded mind maps.
+
+---
+
+## 🎨 Embeddable Canvas UI & Modular Components (React, Angular, Vue, Svelte, HTML)
+
+Because VisualMD widgets (interactive steppers, sandboxed code runners, canvas simulations, tabs, callouts, quizzes, metrics, and mind maps) use a rich, token-efficient interactive UI, parsing is only half the equation—you also need to render them cleanly in your frontend application.
+
+VisualMD provides **`<VisualMDCanvas />`** and a suite of modular standalone components that you can embed directly into your own React, Next.js, Angular, Vue, Svelte, or vanilla web applications with zero setup.
+
+### 1. Import Canvas & Self-Contained Styles
+
+All theme variables, typography, KaTeX math fonts, and widget layouts are bundled into a single stylesheet:
+
+```typescript
+import { VisualMDCanvas } from 'visualmd/canvas';
+import 'visualmd/canvas.css'; // Bundles all 12 themes, KaTeX math & widget styles
+```
+
+### 2. Basic React Canvas Embedding
+
+Pass either a parsed `doc` (from `parseVisualMD()`) or pass raw Markdown / VisualMD string directly via `content`:
+
+```tsx
+import React, { useState } from 'react';
+import { VisualMDCanvas } from 'visualmd/canvas';
+import 'visualmd/canvas.css';
+
+export function AgentOutputViewer({ agentMarkdown }: { agentMarkdown: string }) {
+  return (
+    <div className="w-full max-w-4xl mx-auto rounded-2xl overflow-hidden shadow-2xl border border-zinc-800">
+      <VisualMDCanvas
+        content={agentMarkdown}
+        theme="obsidian"
+        height="600px"
+        width="100%"
+        overflow="auto"
+        showTitle={true}
+      />
+    </div>
+  );
+}
+```
+
+### 3. Selective Node Filtering (`filterTypes`)
+
+If your application only needs specific widgets (e.g. only sandboxed code snippets, or only interactive steppers and quizzes), use the `filterTypes` prop:
+
+```tsx
+// Render ONLY code snippets with secure sandbox runner:
+<VisualMDCanvas doc={doc} filterTypes={['snippet']} theme="dracula" />
+
+// Render ONLY interactive workflows and self-checks:
+<VisualMDCanvas doc={doc} filterTypes={['stepper', 'quiz']} theme="tokyo" />
+
+// Render ONLY hierarchical mind maps:
+<VisualMDCanvas doc={doc} filterTypes={['mindmap']} height="500px" />
+```
+
+### 4. Standalone Modular Widgets
+
+You can also import and render individual widgets independently without wrapping in a full canvas:
+
+```tsx
+import {
+  VisualMDSnippet,
+  VisualMDStepper,
+  VisualMDMindMap,
+  VisualMDQuiz,
+  VisualMDTabs,
+  VisualMDCallout,
+  VisualMDMetrics,
+  VisualMDMarkdown
+} from 'visualmd/canvas';
+import 'visualmd/canvas.css';
+
+// A. Code Snippet with Line Numbers, Syntax Highlighting & Sandbox Execution:
+<VisualMDSnippet
+  code={`const tensor = tf.tensor2d([[1, 2], [3, 4]]);\nconsole.log(tensor.shape);`}
+  lang="typescript"
+  title="TensorOps.ts"
+  theme="obsidian"
+/>
+
+// B. Step-by-Step Interactive Workflow:
+<VisualMDStepper
+  title="Two-Phase Commit Protocol"
+  steps={[
+    { index: 1, title: "Prepare Phase", content: "Coordinator asks cohort replicas to prepare and vote." },
+    { index: 2, title: "Commit Phase", content: "Coordinator broadcasts commit order upon unanimous agreement." }
+  ]}
+  theme="midnight"
+/>
+
+// C. Interactive Zoomable & Draggable Mind Map:
+<VisualMDMindMap
+  content={`
+  # Distributed Consensus
+  - Paxos [badge: Foundational]
+  - Raft [badge: Leader-Based] [summary: Log replication]
+  `}
+  height="450px"
+  theme="tokyo"
+/>
+
+// D. Self-Assessment Quiz with Instant Recall Feedback:
+<VisualMDQuiz
+  question="Why is WAL essential for database crash recovery?"
+  options={[
+    { text: "It persists modifications before committing to data pages", isCorrect: true },
+    { text: "It compresses indexes in memory", isCorrect: false }
+  ]}
+  explanation="The Write-Ahead Log guarantees durability (ACID) by logging state transitions to disk sequentially."
+  theme="obsidian"
+/>
+```
+
+### 5. Universal Framework Integration (Angular, Vue, Svelte, Vanilla JS)
+
+For applications built in Angular, Vue, Svelte, or plain JavaScript without React, use `renderVisualMD()`:
+
+```typescript
+// In Angular (ngAfterViewInit), Vue (onMounted), or Vanilla JS:
+import { renderVisualMD } from 'visualmd/canvas';
+import 'visualmd/canvas.css';
+
+const container = document.getElementById('visualmd-container')!;
+
+const canvasInstance = renderVisualMD(container, {
+  content: `# Live Agent Stream\n$STEPPER$S...`,
+  theme: 'obsidian',
+  height: '600px',
+  width: '100%',
+  overflow: 'auto',
+});
+
+// Update canvas on incoming streaming tokens:
+canvasInstance.update({ content: updatedAgentText });
+
+// Clean up when destroying component:
+canvasInstance.destroy();
+```
+
+### 6. HTML Custom Element (`<visualmd-canvas>`)
+
+VisualMD also auto-registers a Web Component for zero-framework HTML pages:
+
+```html
+<script type="module">
+  import 'visualmd/canvas';
+</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/visualmd/packages/web/dist/canvas/canvas.css">
+
+<visualmd-canvas
+  content="# System Architecture&#10;- Core Engine&#10;  - Ingest&#10;  - Parser"
+  theme="tokyo"
+  height="500px">
+</visualmd-canvas>
+```
+
+### 7. Canvas Component Props Reference
+
+| Prop | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `doc` | `VmdDocument` | `undefined` | Pre-parsed AST document from `parseVisualMD()`. |
+| `content` | `string` | `undefined` | Raw markdown / VisualMD text (auto-parsed if `doc` omitted). |
+| `theme` | `ThemeType` | `'obsidian'` | Visual theme: `'obsidian'`, `'tokyo'`, `'midnight'`, `'dracula'`, `'forest'`, `'nord'`, `'retro'`, `'light'`, `'editorial'`, `'notebook'`, `'sepia'`, `'paper'`. |
+| `height` | `string \| number` | `'100%'` | CSS container height (e.g. `'600px'`, `500`). |
+| `width` | `string \| number` | `'100%'` | CSS container width (e.g. `'100%'`, `'800px'`). |
+| `overflow` | `'auto' \| 'hidden' \| 'scroll' \| 'visible'` | `'auto'` | CSS overflow behavior for scrolling. |
+| `filterTypes` | `VmdNode['type'][]` | `undefined` | Filter array: e.g. `['snippet']` or `['stepper', 'quiz']`. |
+| `showTitle` | `boolean` | `true` | Show or hide document title and metadata header bar. |
+| `readOnly` | `boolean` | `true` | Display in embeddable read-only mode. |
+| `fontScale` | `number` | `1` | Relative font scaling multiplier (e.g. `0.9` or `1.15`). |
+| `className` | `string` | `''` | Host container CSS classes. |
+| `style` | `React.CSSProperties` | `{}` | Host container inline styles. |
+| `onNodeClick` | `(node: VmdNode) => void` | `undefined` | Callback fired when user clicks any node card. |
+| `headerActions` | `React.ReactNode` | `undefined` | Custom action buttons to display in canvas header. |
+| `fallback` | `React.ReactNode` | `undefined` | Fallback component when document has no nodes. |
 
 ---
 
@@ -173,6 +438,7 @@ All prompts and skills are organized in the [`prompts/`](prompts/) directory and
 | :--- | :--- | :--- |
 | **[`prompts/system-prompt.txt`](prompts/system-prompt.txt)** | Strict 1-paragraph system prompt with anti-hallucination mandate | Paste directly into ChatGPT Custom Instructions, Claude System Prompt, or Ollama. |
 | **[`prompts/skill.md`](prompts/skill.md)** | Autonomous agent skill with empirical citations & zero-hallucination verification | Drop into autonomous coding agent frameworks (Antigravity, Claude Desktop, Cursor Rules, OpenAI GPTs). |
+| **[`prompts/mindmap-prompt.md`](prompts/mindmap-prompt.md)** | Master AI prompt for standalone `.mindmap` files and `$MINDMAP$` blocks | Generate concept trees, architecture graphs, and study mind maps with zero formatting errors. |
 | **[`prompts/VisualMDStandard.md`](prompts/VisualMDStandard.md)** | Full specification with strict verification rules & citations requirement | Upload or attach to any chat session at the start. |
 
 ---
@@ -198,6 +464,7 @@ VisualMD features a dedicated [`data/`](data/) directory:
 | **Callout / Insights** | `$CALLOUT$S?type=insight\|warn\|perf\|tip`<br>`content...`<br>`$CALLOUT$E` | Modern alert cards with custom icons, accent borders, and collapsible metadata. |
 | **Interactive Metric / Benchmark** | `$METRICS$S`<br>`P99: 4.2ms \| Throughput: 120k rps \| Cost: -40%`<br>`$METRICS$E` | Executive dashboard KPI counters and stat comparison badges. |
 | **Self-Check / Knowledge Check** | `$QUIZ$S?q=Why+partition+Kafka?`<br>`[x] Parallel consumption`<br>`[ ] ACID transactions`<br>`$QUIZ$E` | Interactive quiz box with instant feedback for self-learning retention. |
+| **Interactive Mind Map** | `$MINDMAP$S?title=System+Hierarchy`<br>`- Root`<br>`  - Child [badge: Core] [summary: Note]`<br>`$MINDMAP$E` | Draggable, zoomable canvas with concept inspector drawer, color-coded node badges, auto-layout, and standalone `.mindmap` file support. |
 | **Standard Markdown Fallback** | Pure CommonMark / GFM markdown headings, bold, tables, lists, KaTeX math `$..$`, Mermaid | Seamlessly renders any standard `.md` file with zero configuration. |
 
 ---
@@ -250,7 +517,7 @@ visualmd/
 ├── CONTRIBUTING.md                    # Contribution guidelines & developer setup
 ├── SECURITY.md                        # Enterprise security policy & sandbox guarantees
 ├── README.md                          # Main project documentation
-├── package.json                       # Monorepo configuration (version 1.0.2486)
+├── package.json                       # Monorepo configuration (version 1.0.2600000)
 ├── prompts/                           # Centralized AI skills, prompts & specifications
 │   ├── skill.md                       # Agent skill for Antigravity, Claude, Cursor
 │   ├── VisualMDStandard.md            # Complete VisualMD standard specification
@@ -289,9 +556,9 @@ npm test
 ```
 
 ```
-✔ VisualMD Compiler (16 tests) - 100% pass
-✔ VisualMD Server & Security (16 tests) - 100% pass
-Total: 32 tests, 32 passing, 0 failing
+✔ VisualMD Compiler (29 unit tests) - 100% pass
+✔ VisualMD Server & Security (16 integration tests) - 100% pass
+Total: 45 tests, 45 passing, 0 failing
 ```
 
 ---

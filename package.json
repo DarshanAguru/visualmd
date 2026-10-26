@@ -1,10 +1,43 @@
 {
   "name": "visualmd",
-  "version": "1.0.2486",
+  "version": "1.0.2600000",
   "type": "module",
   "description": "VisualMD: Token-efficient interactive visual markdown workspace for AI-era engineers",
   "main": "packages/server/dist/index.js",
   "types": "packages/server/dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./packages/server/dist/index.d.ts",
+      "import": "./packages/server/dist/index.js",
+      "default": "./packages/server/dist/index.js"
+    },
+    "./compiler": {
+      "types": "./packages/compiler/dist/index.d.ts",
+      "import": "./packages/compiler/dist/index.js",
+      "default": "./packages/compiler/dist/index.js"
+    },
+    "./canvas": {
+      "types": "./packages/web/dist/canvas/index.d.ts",
+      "import": "./packages/web/dist/canvas/index.js",
+      "default": "./packages/web/dist/canvas/index.js"
+    },
+    "./react": {
+      "types": "./packages/web/dist/canvas/index.d.ts",
+      "import": "./packages/web/dist/canvas/index.js",
+      "default": "./packages/web/dist/canvas/index.js"
+    },
+    "./canvas.css": "./packages/web/dist/canvas/canvas.css",
+    "./styles.css": "./packages/web/dist/canvas/canvas.css",
+    "./server": {
+      "types": "./packages/server/dist/index.d.ts",
+      "import": "./packages/server/dist/index.js",
+      "default": "./packages/server/dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "browser": {
+    "./packages/server/dist/index.js": "./packages/compiler/dist/index.js"
+  },
   "bin": {
     "visualmd": "./packages/server/bin/visualmd.js"
   },

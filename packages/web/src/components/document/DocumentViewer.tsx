@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { FullDocument, ThemeType, Folder, DocumentVersion } from '../../types';
 import { parseVisualMD } from '@visualmd/compiler';
 import { CodeBox } from '../widgets/CodeBox';
@@ -8,8 +8,10 @@ import { TabsView } from '../widgets/TabsView';
 import { CalloutBox } from '../widgets/CalloutBox';
 import { MetricsGrid } from '../widgets/MetricsGrid';
 import { QuizBox } from '../widgets/QuizBox';
+import { MindMapView } from '../widgets/MindMapView';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { ErrorBoundary } from '../common/ErrorBoundary';
+import { DocumentMindMapModal } from '../modals/DocumentMindMapModal';
 import {
   Bookmark as BookmarkIcon,
   Presentation,
@@ -44,6 +46,7 @@ import {
   Settings,
   Flame,
   Clock,
+  Brain,
 } from 'lucide-react';
 import { HistoryDrawer } from '../modals/HistoryDrawer';
 import { PomodoroTimer } from '../study/PomodoroTimer';
@@ -291,7 +294,10 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyInitialUploadType, setHistoryInitialUploadType] = useState<'document' | 'mindmap'>('document');
+  const [historyInitialTab, setHistoryInitialTab] = useState<'timeline' | 'upload'>('timeline');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMindMapOpen, setIsMindMapOpen] = useState(false);
   const [previewVersion, setPreviewVersion] = useState<DocumentVersion | null>(null);
 
   // Clear preview when switching documents
@@ -453,9 +459,21 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     }).catch(() => {});
   }, [fontScaleIndex, currentScalePreset.scale]);
 
-  // Keyboard zoom shortcuts: Cmd/Ctrl + '+', Cmd/Ctrl + '-', Cmd/Ctrl + '0'
+  // Keyboard zoom shortcuts: Cmd/Ctrl + '+', Cmd/Ctrl + '-', Cmd/Ctrl + '0', and 'm' for Mind Map
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const isInput =
+        ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName) ||
+        (e.target as HTMLElement)?.isContentEditable;
+
+      if (!isInput && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (e.key === 'm' || e.key === 'M') {
+          e.preventDefault();
+          setIsMindMapOpen((prev) => !prev);
+          return;
+        }
+      }
+
       if (e.metaKey || e.ctrlKey) {
         if (e.key === '=' || e.key === '+') {
           e.preventDefault();
@@ -545,6 +563,22 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
       }
       onUpdateScrollPosition(pos, currentVisibleNode);
     }, 800);
+  };
+
+  const handleScrollToHeading = (headingText: string) => {
+    if (!scrollContainerRef.current) return;
+    const cleanTarget = headingText.toLowerCase().replace(/[*_`]/g, '').trim();
+    const elements = scrollContainerRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6, [data-node-id]');
+    for (let i = 0; i < elements.length; i++) {
+      const el = elements[i] as HTMLElement;
+      const text = el.innerText.toLowerCase().trim();
+      if (text.includes(cleanTarget) || cleanTarget.includes(text)) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('vmd-jump-highlight');
+        setTimeout(() => el.classList.remove('vmd-jump-highlight'), 2000);
+        break;
+      }
+    }
   };
 
   const handleSaveTitle = () => {
@@ -739,7 +773,11 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
           {/* Version History (VCS) */}
           <button
-            onClick={() => setIsHistoryOpen((prev) => !prev)}
+            onClick={() => {
+              setHistoryInitialUploadType('document');
+              setHistoryInitialTab('timeline');
+              setIsHistoryOpen((prev) => !prev);
+            }}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all shadow-xs cursor-pointer ${
               isHistoryOpen
                 ? 'bg-[var(--accent-surface)] border-[var(--accent)] text-[var(--accent)] font-semibold'
@@ -772,6 +810,16 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 <span className="hidden sm:inline">Fullscreen</span>
               </>
             )}
+          </button>
+
+          {/* Interactive Document Mind Map Button */}
+          <button
+            onClick={() => setIsMindMapOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] text-xs font-medium transition-colors shadow-xs cursor-pointer group"
+            title="Interactive Concept Mind Map & Outline (M)"
+          >
+            <Brain className="w-3.5 h-3.5 text-purple-500 group-hover:scale-110 transition-transform" />
+            <span className="hidden xl:inline">Mind Map</span>
           </button>
 
           {/* Slide Deck Presentation Mode */}
@@ -1224,6 +1272,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                         return <MetricsGrid node={node as any} />;
                       case 'quiz':
                         return <QuizBox node={node as any} />;
+                      case 'mindmap':
+                        return <MindMapView node={node as any} />;
                       case 'markdown':
                         return (
                           <MarkdownRenderer
@@ -1286,6 +1336,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
         currentContent={doc.content}
         previewVersionId={previewVersion?.id}
         onPreviewVersion={setPreviewVersion}
+        initialUploadType={historyInitialUploadType}
+        initialTab={historyInitialTab}
         onRestoreVersion={async (versionId) => {
           await handleRestoreVersion(versionId);
           setPreviewVersion(null);
@@ -1298,6 +1350,21 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           setPreviewVersion(null);
         }}
       />
+
+      {/* Interactive Concept Mind Map & Outline Modal */}
+      {effectiveParsedDoc && (
+        <DocumentMindMapModal
+          isOpen={isMindMapOpen}
+          onClose={() => setIsMindMapOpen(false)}
+          document={effectiveParsedDoc}
+          onJumpToHeading={handleScrollToHeading}
+          onOpenHistoryUpload={() => {
+            setHistoryInitialUploadType('mindmap');
+            setHistoryInitialTab('upload');
+            setIsHistoryOpen(true);
+          }}
+        />
+      )}
     </div>
   </div>
   );

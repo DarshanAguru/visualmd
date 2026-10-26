@@ -80,6 +80,24 @@ export interface QuizNode extends BaseNode {
   explanation?: string;
 }
 
+export type MindMapItemType = 'root' | 'heading' | 'concept' | 'metric' | 'step' | 'quiz' | 'callout' | 'formula' | 'snippet';
+
+export interface MindMapItem {
+  id: string;
+  text: string;
+  type?: MindMapItemType;
+  summary?: string;
+  badge?: string;
+  children?: MindMapItem[];
+  collapsed?: boolean;
+}
+
+export interface MindMapNode extends BaseNode {
+  type: 'mindmap';
+  title?: string;
+  root: MindMapItem;
+}
+
 export type VmdNode =
   | MarkdownNode
   | SnippetNode
@@ -88,7 +106,8 @@ export type VmdNode =
   | TabsNode
   | CalloutNode
   | MetricsNode
-  | QuizNode;
+  | QuizNode
+  | MindMapNode;
 
 export interface VmdDocument {
   title: string;
@@ -97,6 +116,36 @@ export interface VmdDocument {
   parsedAt: string;
 }
 
+export interface VisualMDDiagnostic {
+  line?: number;
+  message: string;
+  severity: 'error' | 'warning' | 'info';
+  code: string;
+}
+
+export class VisualMDParseError extends Error {
+  public diagnostics: VisualMDDiagnostic[];
+
+  constructor(message: string, diagnostics: VisualMDDiagnostic[] = []) {
+    super(message);
+    this.name = 'VisualMDParseError';
+    this.diagnostics = diagnostics;
+  }
+}
+
+export class VisualMDValidationError extends Error {
+  public unclosedTags: string[];
+
+  constructor(message: string, unclosedTags: string[] = []) {
+    super(message);
+    this.name = 'VisualMDValidationError';
+    this.unclosedTags = unclosedTags;
+  }
+}
+
 export interface ParseOptions {
   autoHeal?: boolean;
+  strict?: boolean;
+  streamAutoHeal?: boolean;
+  fallbackToMarkdown?: boolean;
 }

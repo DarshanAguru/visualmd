@@ -57,11 +57,11 @@ export interface VersionRecord {
 }
 
 export function isCompatibleDocFile(fileName: string): boolean {
-  return /\.(vmd|md|markdown|mdown|mkd|mkdn)$/i.test(fileName);
+  return /\.(vmd|md|markdown|mdown|mkd|mkdn|mindmap)$/i.test(fileName);
 }
 
 export function getDocTitleFromFileName(fileName: string): string {
-  return fileName.replace(/\.(vmd|md|markdown|mdown|mkd|mkdn)$/i, '');
+  return fileName.replace(/\.(vmd|md|markdown|mdown|mkd|mkdn|mindmap)$/i, '');
 }
 
 export function isPathInsideDir(childPath: string, parentDir: string): boolean {
