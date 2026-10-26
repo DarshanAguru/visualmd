@@ -43,6 +43,7 @@ import {
   HelpCircle,
   Settings,
   Flame,
+  Clock,
 } from 'lucide-react';
 import { HistoryDrawer } from '../modals/HistoryDrawer';
 import { PomodoroTimer } from '../study/PomodoroTimer';
@@ -79,6 +80,7 @@ interface DocumentViewerProps {
   onContentWidthChange?: (width: ContentWidthMode) => void;
   fontScaleIndex?: number;
   onFontScaleIndexChange?: (index: number) => void;
+  isOffline?: boolean;
 }
 
 interface ThemeOption {
@@ -238,6 +240,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   onContentWidthChange: propOnContentWidthChange,
   fontScaleIndex: propFontScaleIndex,
   onFontScaleIndexChange: propOnFontScaleIndexChange,
+  isOffline = false,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(doc.title);
@@ -503,6 +506,15 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   }, [doc.id, doc.last_read_position]);
 
   const scrollDebounceRef = useRef<any>(null);
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  const estimatedReadingTime = useMemo(() => {
+    if (!doc.content) return '1 min read';
+    const clean = doc.content.replace(/\$[A-Z_]+(?:\$[SE]|\?[^\n]*)?/gi, ' ');
+    const words = clean.trim().split(/\s+/).filter(Boolean).length;
+    const minutes = Math.max(1, Math.ceil(words / 200));
+    return `${minutes} min read`;
+  }, [doc.content]);
 
   useEffect(() => {
     return () => {
@@ -512,6 +524,11 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    const maxScroll = scrollHeight - clientHeight;
+    const progress = maxScroll > 0 ? Math.min(100, Math.max(0, (scrollTop / maxScroll) * 100)) : 0;
+    setScrollProgress(progress);
+
     if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
     scrollDebounceRef.current = setTimeout(() => {
       if (!scrollContainerRef.current) return;
@@ -585,7 +602,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
               <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate max-w-[120px] sm:max-w-[200px] md:max-w-xs lg:max-w-md">
                 {effectiveTitle}
               </h2>
-              {!previewVersion && (
+              {!previewVersion && !isOffline && (
                 <button
                   onClick={() => setIsEditingTitle(true)}
                   className="opacity-0 group-hover:opacity-100 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-opacity"
@@ -594,6 +611,11 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                   <Edit2 className="w-3 h-3" />
                 </button>
               )}
+              {/* Estimated Reading Time Badge */}
+              <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)] shrink-0 select-none">
+                <Clock className="w-3 h-3 text-[var(--accent)]" />
+                <span>{estimatedReadingTime}</span>
+              </span>
             </div>
           )}
         </div>
@@ -763,6 +785,14 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           </button>
         </div>
       </header>
+
+      {/* Reading Progress Bar (Student & Researcher UX) */}
+      <div className="w-full h-0.5 bg-transparent overflow-hidden shrink-0 z-30">
+        <div
+          className="h-full bg-[var(--accent)] transition-all duration-150 ease-out"
+          style={{ width: `${scrollProgress}%` }}
+        />
+      </div>
 
       {/* Main Reading Canvas & Side-by-Side In-Flow History Drawer */}
       <div className="flex-1 flex min-w-0 h-full overflow-hidden relative">

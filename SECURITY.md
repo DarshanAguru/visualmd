@@ -4,7 +4,8 @@
 
 | Version | Status | Security Support | Release Notes / Highlights |
 | :--- | :--- | :--- | :--- |
-| **v1.0.2484** | **Latest (Current)** | :white_check_mark: Actively Supported | Full KaTeX math engine with nested fraction & unicode operator support, 1-click Markdown table export, rich Quiz explanations, Metrics tooltips, Stepper keyboard navigation, and auto-expanding sidebar search |
+| **v1.0.2486** | **Latest (Current)** | :white_check_mark: Actively Supported | KaTeX math auto-healing (unescaped ampersands & absolute value pipes), offline localStorage caching (server-disconnect reading tolerance), reading progress bar, and estimated reading time |
+| **v1.0.2484** | Previous Release | :white_check_mark: Actively Supported | Full KaTeX math engine with nested fraction & unicode operator support, 1-click Markdown table export, rich Quiz explanations, Metrics tooltips, Stepper keyboard navigation, and auto-expanding sidebar search |
 | **v1.0.2482** | Previous Release | :white_check_mark: Actively Supported | Adaptive math & table parser engine preventing table row swallowing, currency false-positive immunity, horizontal scroll containment for wide tables, defensive compiler guards against malformed inputs |
 | **v1.0.248** | Previous Release | :white_check_mark: Actively Supported | In-app native PDF viewer & interactive image viewer, virtual folder companion assets grouping (1-level depth with nested subfolder immunity), direct asset deletion API, and multi-resource Markdown workflow |
 | **v1.0.246** | Previous Release | :white_check_mark: Actively Supported | Foreign key constraint resilience, folder auto-prune immunity on creation, Express exception crash protection, folder cascade disassociation |

@@ -400,6 +400,25 @@ $QUIZ$E`;
   assert.match(quiz.explanation, /\\text\{Leverage Ratio\}/);
 });
 
+test('VisualMD Compiler (v1.0.2486) - Financial and Absolute Value Math Formulas with Ampersands and Pipes', () => {
+  const input = `# RBI Master Directions - Capital Adequacy
+
+The Foreign Currency (FC) capital charge is determined by:
+$$\\text{FC} = |\\text{Net P&L on Trading Book}| + |\\text{Net P&L on Banking Book}|$$
+
+Where the total capital charge includes:
+$\\text{Capital Charge} = \\max(|\\text{Long Net P&L}|, |\\text{Short Net P&L}|)$
+
+And standalone raw equation:
+\\text{FC} = |\\text{Net P&L on Trading Book}| + |\\text{Net P&L on Banking Book}|`;
+
+  const doc = parseVisualMD(input);
+  assert.equal(doc.title, 'RBI Master Directions - Capital Adequacy');
+  assert.equal(doc.nodes.length, 1);
+  assert.equal(doc.nodes[0].type, 'markdown');
+  assert.match(doc.nodes[0].content, /\\text\{FC\} = \|\\text\{Net P&L on Trading Book\}\|/);
+});
+
 
 
 

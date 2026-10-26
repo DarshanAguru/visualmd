@@ -1,6 +1,6 @@
 {
   "name": "visualmd",
-  "version": "1.0.2484",
+  "version": "1.0.2486",
   "type": "module",
   "description": "VisualMD: Token-efficient interactive visual markdown workspace for AI-era engineers",
   "main": "packages/server/dist/index.js",

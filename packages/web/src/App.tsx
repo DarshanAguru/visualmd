@@ -41,6 +41,7 @@ export const App: React.FC = () => {
   const [initialLoading, setInitialLoading] = useState(true);
   const [isDocumentLoading, setIsDocumentLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
 
   // Modals & Panels
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -178,7 +179,7 @@ export const App: React.FC = () => {
     }).catch(() => {});
   };
 
-  // Load Folders & Documents with stable ordering
+  // Load Folders & Documents with stable ordering & offline cache fallback
   const loadWorkspace = useCallback(async () => {
     try {
       const [foldersRes, docsRes] = await Promise.all([
@@ -191,6 +192,11 @@ export const App: React.FC = () => {
         const docsData: DocumentMeta[] = await docsRes.json();
         setFolders(foldersData);
         setDocuments(docsData);
+        setIsOffline(false);
+
+        try {
+          localStorage.setItem('visualmd-cached-workspace', JSON.stringify({ folders: foldersData, documents: docsData }));
+        } catch {}
 
         // Check URL for /view/:id or auto-select initial document
         const pathMatch = window.location.pathname.match(/\/view\/([a-zA-Z0-9_-]+)/);
@@ -221,13 +227,49 @@ export const App: React.FC = () => {
             }
           }
         }
+      } else {
+        throw new Error('Workspace response not ok');
       }
     } catch (err) {
-      console.error('Failed to load workspace data:', err);
+      console.warn('Network error or server disconnected, checking offline cache:', err);
+      setIsOffline(true);
+      const cachedStr = localStorage.getItem('visualmd-cached-workspace');
+      if (cachedStr) {
+        try {
+          const cached = JSON.parse(cachedStr);
+          if (cached.folders) setFolders(cached.folders);
+          if (cached.documents) {
+            setDocuments(cached.documents);
+            setSelectedDocId((prev) => {
+              if (prev && cached.documents.some((d: any) => d.id === prev)) return prev;
+              const pathMatch = window.location.pathname.match(/\/view\/([a-zA-Z0-9_-]+)/);
+              const urlDocId = pathMatch ? pathMatch[1] : null;
+              if (urlDocId && cached.documents.some((d: any) => d.id === urlDocId)) return urlDocId;
+              return cached.documents.length > 0 ? cached.documents[0].id : null;
+            });
+          }
+        } catch {}
+      }
     } finally {
       setInitialLoading(false);
     }
   }, []);
+
+  // Offline Heartbeat Auto-reconnect: polls server when disconnected to seamlessly restore live mode
+  useEffect(() => {
+    if (!isOffline) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/folders', { method: 'HEAD', cache: 'no-store' });
+        if (res.ok) {
+          setIsOffline(false);
+          loadWorkspace();
+          setDocReloadTrigger((v) => v + 1);
+        }
+      } catch {}
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isOffline, loadWorkspace]);
 
   useEffect(() => {
     loadWorkspace();
@@ -349,22 +391,56 @@ export const App: React.FC = () => {
             const parsed = parseVisualMD(docData.content);
             setCurrentDoc({ ...docData, parsedDoc: parsed });
             setDocNotFound(false);
+            setIsOffline(false);
+
+            try {
+              localStorage.setItem(`visualmd-cached-doc-${selectedDocId}`, JSON.stringify(docData));
+            } catch {}
 
             // Update URL cleanly without full page refresh
             if (window.location.pathname !== `/view/${selectedDocId}`) {
               window.history.replaceState(null, '', `/view/${selectedDocId}`);
             }
           } else {
-            // Document was not found or URL is invalid
-            setCurrentDoc(null);
-            setDocNotFound(true);
+            // Check offline cache first before declaring 404
+            const cachedDocStr = localStorage.getItem(`visualmd-cached-doc-${selectedDocId}`);
+            if (cachedDocStr) {
+              try {
+                const docData = JSON.parse(cachedDocStr);
+                const parsed = parseVisualMD(docData.content);
+                setCurrentDoc({ ...docData, parsedDoc: parsed });
+                setDocNotFound(false);
+                setIsOffline(true);
+              } catch {
+                setCurrentDoc(null);
+                setDocNotFound(true);
+              }
+            } else {
+              // Document was not found or URL is invalid
+              setCurrentDoc(null);
+              setDocNotFound(true);
+            }
           }
         }
       } catch (err) {
         if (!isCancelled) {
-          console.error('Failed to fetch document:', err);
-          setCurrentDoc(null);
-          setDocNotFound(true);
+          console.warn('Failed to fetch document from server, attempting offline restore:', err);
+          setIsOffline(true);
+          const cachedDocStr = localStorage.getItem(`visualmd-cached-doc-${selectedDocId}`);
+          if (cachedDocStr) {
+            try {
+              const docData = JSON.parse(cachedDocStr);
+              const parsed = parseVisualMD(docData.content);
+              setCurrentDoc({ ...docData, parsedDoc: parsed });
+              setDocNotFound(false);
+            } catch {
+              setCurrentDoc(null);
+              setDocNotFound(true);
+            }
+          } else {
+            setCurrentDoc(null);
+            setDocNotFound(true);
+          }
         }
       } finally {
         if (!isCancelled) {
@@ -919,7 +995,20 @@ export const App: React.FC = () => {
       />
 
       {/* Main Document Workspace or In-App Asset Viewer or Initial Parser Loader */}
-      {!currentDoc && isDocumentLoading ? (
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+        {/* Offline Mode Persistence Banner */}
+        {isOffline && (
+          <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-1.5 flex items-center justify-between text-xs text-amber-600 dark:text-amber-400 select-none z-50 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span className="font-semibold">Offline Mode (Server Disconnected)</span>
+              <span className="text-[11px] opacity-80 hidden sm:inline">• Document preserved in read-only mode</span>
+            </div>
+            <span className="text-[10px] font-mono opacity-80">Auto-reconnecting...</span>
+          </div>
+        )}
+
+        {!currentDoc && isDocumentLoading ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8 gap-3 bg-[var(--bg-primary)]">
           <div className="w-8 h-8 rounded-full border-2 border-[var(--border-color)] border-t-blue-500 animate-spin" />
           <div className="text-center">
@@ -1027,6 +1116,7 @@ export const App: React.FC = () => {
             onContentWidthChange={handleContentWidthChange}
             fontScaleIndex={fontScaleIndex}
             onFontScaleIndexChange={handleFontScaleIndexChange}
+            isOffline={isOffline}
           />
 
           {/* Bookmarks & Sticky Notes Drawer - in-flow and resizable */}
@@ -1056,6 +1146,7 @@ export const App: React.FC = () => {
           </button>
         </div>
       )}
+      </div>
 
       {/* Floating Selection Annotation Toolbar */}
       <AnnotationToolbar

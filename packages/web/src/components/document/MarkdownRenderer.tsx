@@ -60,18 +60,42 @@ interface MathItem {
   isBlock: boolean;
 }
 
-function renderMathExpression(math: string, isBlock: boolean): string {
-  const m = math.trim();
-  const escapedOriginal = escapeHtml(m);
+function normalizeMathForKatex(rawMath: string): string {
+  let m = rawMath.trim();
 
-  // Normalize common unicode symbols / typos to standard LaTeX before passing to KaTeX
-  const normalized = m
+  // 1. Normalize common unicode operators to LaTeX commands
+  m = m
     .replace(/×/g, '\\times ')
     .replace(/÷/g, '\\div ')
     .replace(/≤/g, '\\le ')
     .replace(/≥/g, '\\ge ')
     .replace(/≠/g, '\\ne ')
-    .replace(/≈/g, '\\approx ');
+    .replace(/≈/g, '\\approx ')
+    .replace(/±/g, '\\pm ')
+    .replace(/·/g, '\\cdot ');
+
+  // 2. Normalize unescaped ampersands: & -> \& (e.g. Net P&L, R&D, S&P, M&A)
+  // If not inside an alignment environment (aligned, matrix, cases), any unescaped & is a literal ampersand
+  const hasAlignmentEnv = /\\begin\{(?:aligned|matrix|pmatrix|bmatrix|cases|array|split)\}/.test(m);
+  if (!hasAlignmentEnv) {
+    m = m.replace(/(?<!\\)&/g, '\\&');
+  } else {
+    // Inside an alignment environment, escape unescaped & only inside text/mathrm/mathbf
+    m = m.replace(/\\(text|mathrm|mathbf|mathit)\{([^{}]*)\}/g, (_match, cmd, inner) => {
+      return `\\${cmd}{${inner.replace(/(?<!\\)&/g, '\\&')}}`;
+    });
+  }
+
+  // 3. Normalize unescaped percent sign (e.g. 4.0% -> 4.0\%)
+  m = m.replace(/(?<!\\)%/g, '\\%');
+
+  return m;
+}
+
+function renderMathExpression(math: string, isBlock: boolean): string {
+  const m = math.trim();
+  const escapedOriginal = escapeHtml(m);
+  const normalized = normalizeMathForKatex(m);
 
   try {
     const rendered = katex.renderToString(normalized, {
@@ -79,10 +103,13 @@ function renderMathExpression(math: string, isBlock: boolean): string {
       throwOnError: false,
       strict: false,
     });
-    if (isBlock) {
-      return `<div class="vmd-math-block select-text" title="Math formula: ${escapedOriginal}">${rendered}</div>`;
+    // Check if KaTeX produced a parse error (katex-error span)
+    if (!rendered.includes('katex-error')) {
+      if (isBlock) {
+        return `<div class="vmd-math-block select-text group/math relative" data-latex="${escapedOriginal}" title="Click copy button or Alt+Click to copy LaTeX: ${escapedOriginal}">${rendered}<button type="button" class="vmd-copy-math-btn absolute top-1.5 right-1.5 opacity-0 group-hover/math:opacity-100 transition-opacity p-1 rounded bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer" title="Copy LaTeX formula">📋</button></div>`;
+      }
+      return `<span class="vmd-math select-text" data-latex="${escapedOriginal}" title="Math: ${escapedOriginal}">${rendered}</span>`;
     }
-    return `<span class="vmd-math select-text" title="Math: ${escapedOriginal}">${rendered}</span>`;
   } catch (err) {
     console.warn('[VisualMD] KaTeX rendering exception:', err);
   }
@@ -123,9 +150,9 @@ function renderMathExpression(math: string, isBlock: boolean): string {
   fallback = fallback.replace(/\b([A-Za-z])\b(?![^<]*>)/g, '<i>$1</i>');
 
   if (isBlock) {
-    return `<div class="vmd-math-block select-text" title="Math formula: ${escapedOriginal}">${fallback}</div>`;
+    return `<div class="vmd-math-block select-text group/math relative" data-latex="${escapedOriginal}" title="Click copy button or Alt+Click to copy LaTeX: ${escapedOriginal}">${fallback}<button type="button" class="vmd-copy-math-btn absolute top-1.5 right-1.5 opacity-0 group-hover/math:opacity-100 transition-opacity p-1 rounded bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer" title="Copy LaTeX formula">📋</button></div>`;
   }
-  return `<span class="vmd-math select-text" title="Math: ${escapedOriginal}">${fallback}</span>`;
+  return `<span class="vmd-math select-text" data-latex="${escapedOriginal}" title="Math: ${escapedOriginal}">${fallback}</span>`;
 }
 
 function preprocessMath(markdown: string): { text: string; mathMap: Map<string, MathItem> } {
@@ -162,23 +189,28 @@ function preprocessMath(markdown: string): { text: string; mathMap: Map<string, 
   });
 
   // 4. Standard inline math: $...$
-  // Pandoc / LaTeX standard to avoid false positives with currency e.g. $83B or US$ 721B:
-  // - Opening $: cannot be preceded by alphanumeric or backslash
-  // - Opening $: cannot be followed by space or digit
-  // - Body: cannot contain $, \n, or table cell delimiter |
-  // - Closing $: cannot be preceded by space
-  // - Closing $: cannot be followed by alphanumeric or digit
+  // In non-table lines, allow | (for absolute values, conditional probability, norms)
+  // In table lines, allow paired or escaped pipes without crossing cell delimiters
   const isCurrency = (str: string) =>
     /^\s*[\d,.]+\s*(?:[kKmMgGtTbB]|bn|mn|tr|cr|lakh|crore|million|billion|trillion)?\s*$/i.test(str.trim());
 
-  protectedText = protectedText.replace(/(?<![\w\\])\$(?!\s|\d)([^$\n|]+?)(?<!\s)\$(?![\w\d])/g, (match, math) => {
-    if (isCurrency(math)) {
-      return match;
-    }
-    const key = `VMDMATHINLINE${counter++}END`;
-    mathMap.set(key, { math, isBlock: false });
-    return key;
+  const lines = protectedText.split(/\r?\n/);
+  const processedLines = lines.map((line) => {
+    const isTableRow = /^\s*\|/.test(line);
+    const inlineRegex = isTableRow
+      ? /(?<![\w\\])\$(?!\s|\d)((?:\\\||\|[^|\n]+\||[^$\n|])+?)(?<!\s)\$(?![\w\d])/g
+      : /(?<![\w\\])\$(?!\s|\d)([^$\n]+?)(?<!\s)\$(?![\w\d])/g;
+
+    return line.replace(inlineRegex, (match, math) => {
+      if (isCurrency(math)) {
+        return match;
+      }
+      const key = `VMDMATHINLINE${counter++}END`;
+      mathMap.set(key, { math, isBlock: false });
+      return key;
+    });
   });
+  protectedText = processedLines.join('\n');
 
   // 5. Standalone raw LaTeX equation lines: e.g. \text{...} = \frac{...}{...} or \frac{...}{...} = ...
   protectedText = protectedText.replace(/(^|\n)\s*(\\(?:text|frac|mathbf|mathrm)\{[^{}]+\}[^\n]*=[^\n]+)(?=\n|$)/g, (_match, prefix, math) => {
@@ -1073,6 +1105,25 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         setTimeout(() => {
           if (copyBtn) copyBtn.textContent = origText || 'Copy';
         }, 2000);
+      }
+      return;
+    }
+
+    // 5b. Copy Math LaTeX Formula Button
+    const copyMathBtn = target.closest('.vmd-copy-math-btn') as HTMLElement | null;
+    const mathBlock = target.closest('.vmd-math-block') as HTMLElement | null;
+    if (copyMathBtn || (mathBlock && e.altKey)) {
+      e.stopPropagation();
+      const targetBlock = copyMathBtn ? copyMathBtn.closest('.vmd-math-block') : mathBlock;
+      const latex = targetBlock?.getAttribute('data-latex');
+      if (latex) {
+        navigator.clipboard.writeText(latex);
+        if (copyMathBtn) {
+          copyMathBtn.textContent = '✓';
+          setTimeout(() => {
+            if (copyMathBtn) copyMathBtn.textContent = '📋';
+          }, 1500);
+        }
       }
       return;
     }
