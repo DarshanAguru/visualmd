@@ -7,6 +7,7 @@ import {
   autoHealVisualMD,
   parseMindMapFile,
   parseBulletTree,
+  healLatexString,
   VisualMDParseError,
   VisualMDValidationError,
   COMPILER_VERSION,
@@ -702,8 +703,8 @@ Content`;
   assert.equal(Array.isArray(safeDoc.nodes), true);
 });
 
-test('VisualMD Compiler (v1.0.2600000) - Version and Canvas AST Payload Compatibility', () => {
-  assert.equal(COMPILER_VERSION, '1.0.2600000');
+test('VisualMD Compiler (v1.0.2600002) - Version and Canvas AST Payload Compatibility', () => {
+  assert.equal(COMPILER_VERSION, '1.0.2600002');
 
   const richDoc = `# Full System Overview
 $CALLOUT$S?type=insight&title=Core+Principle
@@ -722,7 +723,7 @@ $QUIZ$S?q=Is+VisualMD+canvas+embeddable?
 [x] Yes, in React, Angular, Vue, and HTML
 [ ] No, it only runs on the local server
 $EXPLANATION
-VisualMD v1.0.2600000 provides first-class embeddable canvas components.
+VisualMD v1.0.2600002 provides first-class embeddable canvas components.
 $QUIZ$E`;
 
   const doc = parseVisualMD(richDoc);
@@ -738,7 +739,7 @@ $QUIZ$E`;
   assert.equal(quiz.type, 'quiz');
 });
 
-test('VisualMD Compiler (v1.0.2600000) - MindMap Heading and Section Non-Blank Description Guarantee', () => {
+test('VisualMD Compiler (v1.0.2600002) - MindMap Heading and Section Non-Blank Description Guarantee', () => {
   const input = `# Master System Design
 ## Core Architecture: Event Sourcing & CQRS
 Event sourcing stores all state changes as an immutable sequence of events.
@@ -786,6 +787,86 @@ Alpha implementation details.`;
   assert.ok(emptyHeading, 'Empty heading must exist');
   assert.ok(emptyHeading.summary, 'Empty heading must have non-blank summary');
   assert.match(emptyHeading.summary, /Sub-Concept Alpha|Section/i);
+});
+
+test('VisualMD Compiler (v1.0.2600002) - Section raw content, startLine and endLine tracking', () => {
+  const input = `# Document Title
+
+This is introductory markdown text with a math formula:
+$$\\text{Monthly Pension} = \\frac{\\text{Salary} \\times \\text{Years}}{70}$$
+
+$SNIPPET$S?lang=ts&title=Test.ts
+const a = 1;
+$SNIPPET$E
+
+Final conclusion paragraph.`;
+
+  const doc = parseVisualMD(input);
+  assert.equal(doc.nodes.length, 3);
+
+  // First markdown node
+  const n0 = doc.nodes[0];
+  assert.equal(n0.type, 'markdown');
+  assert.ok(n0.raw);
+  assert.match(n0.raw, /Monthly Pension/);
+  assert.equal(typeof n0.startLine, 'number');
+  assert.equal(typeof n0.endLine, 'number');
+  assert.ok(n0.endLine >= n0.startLine);
+
+  // Snippet node
+  const n1 = doc.nodes[1];
+  assert.equal(n1.type, 'snippet');
+  assert.ok(n1.raw);
+  assert.match(n1.raw, /\$SNIPPET\$S\?lang=ts&title=Test\.ts/);
+  assert.match(n1.raw, /const a = 1;/);
+  assert.match(n1.raw, /\$SNIPPET\$E/);
+  assert.equal(typeof n1.startLine, 'number');
+  assert.equal(typeof n1.endLine, 'number');
+  assert.ok(n1.startLine > n0.endLine);
+
+  // Second markdown node
+  const n2 = doc.nodes[2];
+  assert.equal(n2.type, 'markdown');
+  assert.ok(n2.raw);
+  assert.match(n2.raw, /Final conclusion paragraph/);
+  assert.ok(n2.startLine > n1.endLine);
+});
+
+test('VisualMD Compiler (v1.0.2600002) - Swallowed LaTeX auto-healing and indented math blocks', () => {
+  const corruptedFormula = 'ext{Monthly Pension} = rac{ ext{Pensionable Salary} imes ext{Pensionable Service}}{70}';
+  const healed = healLatexString(corruptedFormula);
+
+  assert.match(healed, /\\text\{Monthly Pension\}/);
+  assert.match(healed, /\\frac\{/);
+  assert.match(healed, /\\times/);
+  assert.match(healed, /\\text\{Pensionable Salary\}/);
+
+  // Test full document autoHeal with 5 spaces before $$
+  const input = `# EPS-95 Document
+
+- **Pension Calculation Formula (EPS-95)**:
+     $$    ext{Monthly Pension} = rac{ ext{Pensionable Salary} imes ext{Pensionable Service}}{70}$$
+
+Additional context.`;
+
+  const healedDocText = autoHealVisualMD(input);
+  // Indented $$ must be normalized so CommonMark won't parse it as an indented code block
+  assert.match(healedDocText, /\$\$\s*\\text\{Monthly Pension\}/);
+  assert.match(healedDocText, /\\frac\{/);
+
+  // Test MindMap hierarchical nesting
+  const doc = parseVisualMD(input);
+  const mm = buildDocumentMindMap(doc);
+  assert.equal(mm.text, 'EPS-95 Document');
+
+  // Verify the list item has the healed formula as its child
+  const pensionNode = mm.children.find((c) => c.text.includes('Pension Calculation Formula'));
+  assert.ok(pensionNode, 'Pension Calculation Formula node must exist');
+  assert.ok(pensionNode.children && pensionNode.children.length > 0, 'Formula must be nested under list item');
+  const formulaChild = pensionNode.children[0];
+  assert.equal(formulaChild.type, 'formula');
+  assert.match(formulaChild.summary, /\\text\{Monthly Pension\}/);
+  assert.match(formulaChild.summary, /\\frac\{/);
 });
 
 

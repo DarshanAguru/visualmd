@@ -122,13 +122,13 @@ export function parseBulletTree(rawLines: string[], defaultTitle: string = 'Mind
     }
 
     // Detect **Term**: Definition syntax
-    const defMatch = text.match(/^\*\*([^*]+)\*\*[:\-–—]\s*(.+)$/);
+    const defMatch = text.match(/^\*\*([^*]+)\*\*(?::\s*|\s+[-–—]\s+)(.+)$/);
     if (defMatch) {
       text = defMatch[1].trim();
       if (!summary) summary = defMatch[2].replace(/[*_`]/g, '').trim();
       if (!badge) badge = 'Concept';
     } else {
-      const plainDefMatch = text.match(/^([^:\-–—]{2,55})[:\-–—]\s*(.+)$/);
+      const plainDefMatch = text.match(/^([^:–—]{2,55})(?::\s+|\s+[-–—]\s+)(.+)$/);
       if (plainDefMatch && !summary) {
         text = plainDefMatch[1].trim();
         summary = plainDefMatch[2].replace(/[*_`]/g, '').trim();
@@ -322,7 +322,6 @@ export function buildDocumentMindMap(doc: VmdDocument): MindMapItem {
         const trimmed = rawLine.trim();
         if (!trimmed) {
           if (summaryBuffer.length > 0) flushSummary();
-          listStack = [];
           continue;
         }
 
@@ -360,7 +359,7 @@ export function buildDocumentMindMap(doc: VmdDocument): MindMapItem {
 
           // Check for colon subtitle in heading: "## Architecture: Distributed Ledger"
           if (!explicitSummary) {
-            const colonDef = text.match(/^([^:\-–—]{2,55})[:\-–—]\s*(.+)$/);
+            const colonDef = text.match(/^([^:–—]{2,55})(?::\s+|\s+[-–—]\s+)(.+)$/);
             if (colonDef) {
               text = colonDef[1].trim();
               explicitSummary = colonDef[2].trim();
@@ -395,21 +394,30 @@ export function buildDocumentMindMap(doc: VmdDocument): MindMapItem {
           continue;
         }
 
-        // 2. Math Formulas ($$...$$)
+        // 2. Math Formulas ($$...$$ or standalone equation)
         const mathMatch = trimmed.match(/^\$\$(.*?)\$\$$/);
-        if (mathMatch || trimmed.startsWith('$$')) {
+        const isRawFormula = !mathMatch && !trimmed.startsWith('$$') && /^(?:\\?(?:text|frac)|ext|rac)\{[^{}]+\}[^=]*=[^=]+$/.test(trimmed);
+        if (mathMatch || trimmed.startsWith('$$') || isRawFormula) {
           flushSummary();
-          const formula = (mathMatch ? mathMatch[1] : trimmed.replace(/\$\$/g, '')).trim();
+          const rawFormula = (mathMatch ? mathMatch[1] : isRawFormula ? trimmed : trimmed.replace(/\$\$/g, '')).trim();
+          const formula = healLatexString(rawFormula);
           if (formula) {
-            const cur = getCurrentHeading();
-            if (!cur.children) cur.children = [];
-            cur.children.push({
+            const mathNode: MindMapItem = {
               id: `doc-mm-${idCounter++}`,
               text: formula.length > 50 ? formula.slice(0, 48) + '...' : formula,
               summary: `LaTeX Equation: $$${formula}$$`,
               type: 'formula',
               badge: 'Formula',
-            });
+            };
+            if (listStack.length > 0) {
+              const parentListItem = listStack[listStack.length - 1].node;
+              if (!parentListItem.children) parentListItem.children = [];
+              parentListItem.children.push(mathNode);
+            } else {
+              const cur = getCurrentHeading();
+              if (!cur.children) cur.children = [];
+              cur.children.push(mathNode);
+            }
           }
           continue;
         }
@@ -465,14 +473,16 @@ export function buildDocumentMindMap(doc: VmdDocument): MindMapItem {
           let badge = explicitBadge || 'Concept';
           let summary = explicitSummary;
 
-          // Parse **Term**: Definition or Term: Definition
-          const defMatch = itemText.match(/^\*\*([^*]+)\*\*[:\-–—]\s*(.+)$/);
-          if (defMatch) {
+          // Parse **Term**: Definition or **Term**: or Term: Definition
+          const defMatch = itemText.match(/^\*\*([^*]+)\*\*(?::\s*|\s*:\s*|\s+[-–—]\s+)?(.*)$/);
+          if (defMatch && defMatch[1].trim()) {
             itemText = defMatch[1].trim();
-            if (!summary) summary = defMatch[2].replace(/[*_`]/g, '').trim();
+            if (defMatch[2] && defMatch[2].trim() && !summary) {
+              summary = defMatch[2].replace(/[*_`]/g, '').trim();
+            }
             if (!explicitBadge) badge = 'Key Concept';
           } else {
-            const colonDef = itemText.match(/^([^:\-–—]{2,55})[:\-–—]\s*(.+)$/);
+            const colonDef = itemText.match(/^([^:–—]{2,55})(?::\s+|\s+[-–—]\s+)(.+)$/);
             if (colonDef) {
               itemText = colonDef[1].trim();
               if (!summary) summary = colonDef[2].replace(/[*_`]/g, '').trim();
@@ -509,7 +519,7 @@ export function buildDocumentMindMap(doc: VmdDocument): MindMapItem {
         }
 
         // 5. Definitions inside standard paragraphs: **Term**: Definition
-        const inlineDef = trimmed.match(/^\*\*([^*]+)\*\*[:\-–—]\s*(.+)$/);
+        const inlineDef = trimmed.match(/^\*\*([^*]+)\*\*(?::\s+|\s+[-–—]\s+)(.+)$/);
         if (inlineDef) {
           flushSummary();
           const term = inlineDef[1].trim();
@@ -528,6 +538,9 @@ export function buildDocumentMindMap(doc: VmdDocument): MindMapItem {
 
         // 6. Collect paragraph text for heading summary
         if (trimmed && !trimmed.startsWith('|') && !trimmed.startsWith('```')) {
+          if (!rawLine.startsWith(' ') && !rawLine.startsWith('\t')) {
+            listStack = [];
+          }
           summaryBuffer.push(trimmed);
         }
       }
@@ -664,6 +677,17 @@ export function buildDocumentMindMap(doc: VmdDocument): MindMapItem {
   return root;
 }
 
+export function healLatexString(str: string = ''): string {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/(?<![a-zA-Z\\])ext\{/g, '\\text{')
+    .replace(/(?<![a-zA-Z\\])rac\{/g, '\\frac{')
+    .replace(/(?<![a-zA-Z\\])imes(?![a-zA-Z])/g, '\\times ')
+    .replace(/(?<![a-zA-Z\\])extbf\{/g, '\\textbf{')
+    .replace(/(?<![a-zA-Z\\])extit\{/g, '\\textit{')
+    .replace(/(?<![a-zA-Z\\])qrt\{/g, '\\sqrt{');
+}
+
 export function autoHealVisualMD(rawText: string = ''): string {
   if (!rawText || typeof rawText !== 'string') return '';
   let content = rawText;
@@ -756,7 +780,18 @@ export function autoHealVisualMD(rawText: string = ''): string {
     healedLines.push('$$');
   }
 
-  return healedLines.join('\n');
+  let healedContent = healedLines.join('\n');
+
+  // Normalize indented math lines (e.g. 2+ spaces before $$ inside or outside lists)
+  // so CommonMark/marked does not mistake it for an indented code block
+  healedContent = healedContent.replace(/(^|\n)[ \t]{2,}\$\$([\s\S]*?)\$\$/g, '$1\n\n$$$$$2$$$$\n\n');
+
+  // Heal swallowed LaTeX commands in $$...$$ blocks
+  healedContent = healedContent.replace(/\$\$([\s\S]*?)\$\$/g, (_match, innerMath) => {
+    return `$$${healLatexString(innerMath)}$$`;
+  });
+
+  return healedContent;
 }
 
 export function parseVisualMD(rawText: string = '', options: ParseOptions = {}): VmdDocument {
@@ -788,7 +823,15 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
   let titleFound = false;
 
   let currentMarkdownBuffer: string[] = [];
+  let currentMarkdownStartLine = -1;
   let nodeCounter = 0;
+
+  function pushMarkdownLine(line: string, index: number) {
+    if (currentMarkdownStartLine === -1) {
+      currentMarkdownStartLine = index;
+    }
+    currentMarkdownBuffer.push(line);
+  }
 
   function cleanMarkdownLines(rawLines: string[]): string[] {
     let inFence = false;
@@ -807,17 +850,23 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
     });
   }
 
-  function flushMarkdown() {
+  function flushMarkdown(endLine?: number) {
     const cleaned = cleanMarkdownLines(currentMarkdownBuffer);
     const text = cleaned.join('\n').trim();
     if (text) {
+      const sLine = currentMarkdownStartLine !== -1 ? currentMarkdownStartLine : 0;
+      const eLine = endLine !== undefined ? endLine : (sLine + currentMarkdownBuffer.length - 1);
       nodes.push({
         id: `node-${nodeCounter++}`,
         type: 'markdown',
         content: text,
+        raw: currentMarkdownBuffer.join('\n'),
+        startLine: sLine,
+        endLine: eLine,
       } as MarkdownNode);
     }
     currentMarkdownBuffer = [];
+    currentMarkdownStartLine = -1;
   }
 
   type ActiveBlockType = 'SNIPPET' | 'STEPPER' | 'CANVAS' | 'TABS' | 'CALLOUT' | 'METRICS' | 'QUIZ' | 'MINDMAP';
@@ -827,13 +876,17 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
     params: Record<string, string>;
     rawLines: string[];
     startLine: number;
+    openLine: string;
   }
 
   let activeBlock: ActiveBlockState | null = null;
 
-  function finalizeBlock(block: ActiveBlockState) {
+  function finalizeBlock(block: ActiveBlockState, endLine: number) {
     const id = `node-${nodeCounter++}`;
     const rawContent = block.rawLines.join('\n');
+    const fullBlockRaw = [block.openLine, ...block.rawLines, `$${block.type}$E`].join('\n');
+
+    let createdNode: VmdNode | null = null;
 
     try {
       switch (block.type) {
@@ -842,7 +895,7 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
         const title = block.params.title;
         const highlight = block.params.highlight;
         const diff = block.params.diff === 'true';
-        nodes.push({
+        createdNode = {
           id,
           type: 'snippet',
           lang,
@@ -850,7 +903,7 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
           highlight,
           diff,
           code: rawContent.trim(),
-        } as SnippetNode);
+        } as SnippetNode;
         break;
       }
 
@@ -901,12 +954,12 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
           });
         }
 
-        nodes.push({
+        createdNode = {
           id,
           type: 'stepper',
           title,
           steps,
-        } as StepperNode);
+        } as StepperNode;
         break;
       }
 
@@ -916,14 +969,14 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
           : 'canvas2d') as CanvasNode['engine'];
         const height = parseInt(block.params.height, 10) || 300;
         const title = block.params.title;
-        nodes.push({
+        createdNode = {
           id,
           type: 'canvas',
           engine,
           height,
           title,
           code: rawContent.trim(),
-        } as CanvasNode);
+        } as CanvasNode;
         break;
       }
 
@@ -970,11 +1023,11 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
           });
         }
 
-        nodes.push({
+        createdNode = {
           id,
           type: 'tabs',
           tabs,
-        } as TabsNode);
+        } as TabsNode;
         break;
       }
 
@@ -993,13 +1046,13 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
           calloutType = 'insight';
         }
         const title = block.params.title;
-        nodes.push({
+        createdNode = {
           id,
           type: 'callout',
           calloutType,
           title,
           content: rawContent.trim(),
-        } as CalloutNode);
+        } as CalloutNode;
         break;
       }
 
@@ -1025,11 +1078,11 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
           }
         }
 
-        nodes.push({
+        createdNode = {
           id,
           type: 'metrics',
           items,
-        } as MetricsNode);
+        } as MetricsNode;
         break;
       }
 
@@ -1065,50 +1118,57 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
           explanation = explanationLines.join('\n').trim();
         }
 
-        nodes.push({
+        createdNode = {
           id,
           type: 'quiz',
           question,
           options,
           explanation,
-        } as QuizNode);
+        } as QuizNode;
         break;
       }
 
       case 'MINDMAP': {
         const title = block.params.title || 'Mind Map';
         const root = parseBulletTree(block.rawLines, title);
-        nodes.push({
+        createdNode = {
           id,
           type: 'mindmap',
           title,
           root,
-        } as MindMapNode);
+        } as MindMapNode;
         break;
       }
+      }
+    } catch (err) {
+      if (options?.strict) {
+        throw new VisualMDParseError(
+          `Failed to parse ${block.type} block: ${err instanceof Error ? err.message : String(err)}`,
+          [
+            {
+              line: block.startLine,
+              message: err instanceof Error ? err.message : String(err),
+              severity: 'error',
+              code: 'BLOCK_PARSE_ERROR',
+            },
+          ]
+        );
+      }
+      // Safe fallback: render raw content as a markdown block so rendering never crashes
+      createdNode = {
+        id,
+        type: 'markdown',
+        content: `> **Warning**: VisualMD could not parse the \`${block.type}\` block safely.\n\n\`\`\`\n${rawContent}\n\`\`\``,
+      } as MarkdownNode;
     }
-  } catch (err) {
-    if (options?.strict) {
-      throw new VisualMDParseError(
-        `Failed to parse ${block.type} block: ${err instanceof Error ? err.message : String(err)}`,
-        [
-          {
-            line: block.startLine,
-            message: err instanceof Error ? err.message : String(err),
-            severity: 'error',
-            code: 'BLOCK_PARSE_ERROR',
-          },
-        ]
-      );
+
+    if (createdNode) {
+      createdNode.raw = fullBlockRaw;
+      createdNode.startLine = block.startLine;
+      createdNode.endLine = endLine;
+      nodes.push(createdNode);
     }
-    // Safe fallback: render raw content as a markdown block so rendering never crashes
-    nodes.push({
-      id,
-      type: 'markdown',
-      content: `> **Warning**: VisualMD could not parse the \`${block.type}\` block safely.\n\n\`\`\`\n${rawContent}\n\`\`\``,
-    } as MarkdownNode);
   }
-}
 
   let inMarkdownCodeFence = false;
 
@@ -1120,11 +1180,11 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
     if (!activeBlock) {
       if (/^(?:```|~~~)/.test(trimmed)) {
         inMarkdownCodeFence = !inMarkdownCodeFence;
-        currentMarkdownBuffer.push(line);
+        pushMarkdownLine(line, i);
         continue;
       }
       if (inMarkdownCodeFence) {
-        currentMarkdownBuffer.push(line);
+        pushMarkdownLine(line, i);
         continue;
       }
     }
@@ -1143,14 +1203,14 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
     if (activeBlock && activeBlock.type === 'TABS') {
       const endMatch = trimmed.match(/^\$TABS\$E$/i);
       if (endMatch) {
-        finalizeBlock(activeBlock);
+        finalizeBlock(activeBlock, i);
         activeBlock = null;
         continue;
       }
       if (autoHeal && trimmed.match(/^#\s+/)) {
-        finalizeBlock(activeBlock);
+        finalizeBlock(activeBlock, i - 1);
         activeBlock = null;
-        currentMarkdownBuffer.push(line);
+        pushMarkdownLine(line, i);
         continue;
       }
       activeBlock.rawLines.push(line);
@@ -1176,17 +1236,18 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
         // If an active block was already open and autoHeal is enabled, heal it
         if (activeBlock) {
           if (autoHeal) {
-            finalizeBlock(activeBlock);
+            finalizeBlock(activeBlock, i - 1);
             activeBlock = null;
           }
         }
 
-        flushMarkdown();
+        flushMarkdown(i - 1);
         activeBlock = {
           type: blockType,
           params: parseParams(startMatch[2] || ''),
           rawLines: [],
           startLine: i,
+          openLine: line,
         };
         continue;
       }
@@ -1196,16 +1257,16 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
     if (activeBlock) {
       const endMatch = trimmed.match(/^\$([A-Z_]+)\$E$/i);
       if (endMatch && endMatch[1].toUpperCase() === activeBlock.type) {
-        finalizeBlock(activeBlock);
+        finalizeBlock(activeBlock, i);
         activeBlock = null;
         continue;
       }
 
       // Auto-heal on markdown headings (H1-H6) or horizontal divider (---) if unclosed
       if (autoHeal && (trimmed.match(/^#{1,6}\s+/) || trimmed.match(/^(?:---|\*\*\*|___)\s*$/))) {
-        finalizeBlock(activeBlock);
+        finalizeBlock(activeBlock, i - 1);
         activeBlock = null;
-        currentMarkdownBuffer.push(line);
+        pushMarkdownLine(line, i);
         continue;
       }
 
@@ -1215,15 +1276,15 @@ export function parseVisualMD(rawText: string = '', options: ParseOptions = {}):
     }
 
     // Regular markdown line
-    currentMarkdownBuffer.push(line);
+    pushMarkdownLine(line, i);
   }
 
   // End of file handling
   if (activeBlock) {
-    finalizeBlock(activeBlock);
+    finalizeBlock(activeBlock, lines.length - 1);
     activeBlock = null;
   }
-  flushMarkdown();
+  flushMarkdown(lines.length - 1);
 
   return {
     title: currentTitle,

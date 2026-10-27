@@ -40,12 +40,16 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
       // Check if selection is within a Mind Map, modal, or element explicitly disabling annotations
       let testElem: Node | null = selection.anchorNode;
       while (testElem && testElem !== document.body) {
-        if (testElem instanceof HTMLElement) {
+        if (testElem instanceof Element) {
           if (
             testElem.hasAttribute('data-no-annotation') ||
             testElem.hasAttribute('data-mindmap-canvas') ||
-            testElem.classList.contains('mindmap-modal') ||
-            testElem.tagName === 'DIALOG'
+            testElem.closest?.('[data-no-annotation]') ||
+            testElem.closest?.('[data-mindmap-canvas]') ||
+            testElem.closest?.('.vmd-mindmap-container') ||
+            testElem.closest?.('.mindmap-modal') ||
+            testElem.tagName === 'DIALOG' ||
+            testElem.tagName.toLowerCase() === 'svg'
           ) {
             setPosition(null);
             return;

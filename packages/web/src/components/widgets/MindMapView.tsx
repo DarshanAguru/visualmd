@@ -214,6 +214,31 @@ export const MindMapView: React.FC<MindMapViewProps> = ({ node }) => {
     };
   }, []);
 
+  // Keyboard navigation & zoom shortcuts when canvas is focused
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        setZoomScale((prev) => Math.min(2.5, Number((prev + 0.15).toFixed(2))));
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        setZoomScale((prev) => Math.max(0.35, Number((prev - 0.15).toFixed(2))));
+      } else if (e.key === '0') {
+        e.preventDefault();
+        resetPanAndZoom();
+      }
+    };
+
+    canvas.addEventListener('keydown', handleKeyDown);
+    return () => {
+      canvas.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [resetPanAndZoom]);
+
   const handleCopyMarkdown = () => {
     function serialize(item: MindMapItem, indent: number): string {
       const prefix = '  '.repeat(indent);
@@ -269,23 +294,26 @@ export const MindMapView: React.FC<MindMapViewProps> = ({ node }) => {
         {/* Toolbar Controls */}
         <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={() => setZoomScale((s) => Math.max(0.4, s - 0.15))}
-            className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-            title="Zoom Out"
+            onClick={() => setZoomScale((s) => Math.max(0.35, Number((s - 0.15).toFixed(2))))}
+            className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            title="Zoom Out (Key: -)"
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
+          <span className="text-[11px] font-mono text-[var(--text-muted)] min-w-[36px] text-center select-none">
+            {Math.round(zoomScale * 100)}%
+          </span>
           <button
-            onClick={() => setZoomScale((s) => Math.min(2.0, s + 0.15))}
-            className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-            title="Zoom In"
+            onClick={() => setZoomScale((s) => Math.min(2.5, Number((s + 0.15).toFixed(2))))}
+            className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            title="Zoom In (Key: +)"
           >
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={resetPanAndZoom}
-            className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-            title="Reset Pan & Zoom"
+            className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            title="Reset Pan & Zoom (Key: 0)"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
@@ -326,7 +354,8 @@ export const MindMapView: React.FC<MindMapViewProps> = ({ node }) => {
       <div
         ref={canvasRef}
         onMouseDown={handleMouseDown}
-        className={`w-full overflow-hidden p-4 select-none relative bg-[var(--bg-card)] ${
+        tabIndex={0}
+        className={`w-full overflow-hidden p-4 select-none relative bg-[var(--bg-card)] outline-none focus:ring-1 focus:ring-blue-500/30 ${
           isFullscreen ? 'flex-1' : 'h-[460px]'
         } ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         style={{

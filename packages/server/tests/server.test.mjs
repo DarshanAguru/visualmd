@@ -640,7 +640,7 @@ test('Server - Starter tutorial bookmarks and annotations are seeded on initial 
   }
 });
 
-test('Server (v1.0.2600000) - Health Version & Prefix FTS5 Search', async () => {
+test('Server (v1.0.2600002) - Health Version & Prefix FTS5 Search', async () => {
   const tmpDb = path.join(os.tmpdir(), `vmd-test-v10244-${Date.now()}.db`);
   const db = new VisualMDDatabase(tmpDb);
   const app = createServer(db);
@@ -652,11 +652,11 @@ test('Server (v1.0.2600000) - Health Version & Prefix FTS5 Search', async () => 
   const baseUrl = `http://localhost:${port}`;
 
   try {
-    // 1. Check health returns version 1.0.244
+    // 1. Check health returns version 1.0.2600002
     const healthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(healthRes.status, 200);
     const health = await healthRes.json();
-    assert.equal(health.version, '1.0.2600000');
+    assert.equal(health.version, '1.0.2600002');
 
     // 2. Test prefix search in database
     db.createDocument('Distributed Consensus With Raft', 'Leader election and log replication algorithms in Raft.');
@@ -1214,7 +1214,7 @@ test('Cross-OS Compatibility - Path Traversal, Slash & Case Tolerance, and LF Bi
   );
 });
 
-test('Server (v1.0.2600000) - Folder lifecycle, auto-prune immunity, foreign key integrity & crash protection', async () => {
+test('Server (v1.0.2600002) - Folder lifecycle, auto-prune immunity, foreign key integrity & crash protection', async () => {
   const tmpDb = path.join(os.tmpdir(), `vmd-fk-test-${Date.now()}.db`);
   const tmpDataDir = path.join(os.tmpdir(), `vmd-fk-dir-${Date.now()}`);
   fs.mkdirSync(tmpDataDir, { recursive: true });
@@ -1255,7 +1255,7 @@ test('Server (v1.0.2600000) - Folder lifecycle, auto-prune immunity, foreign key
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: 'Meeting Notes',
-        content: '# Meeting\nDiscussing v1.0.2600000 release.',
+        content: '# Meeting\nDiscussing v1.0.2600002 release.',
         folder_id: folder.id,
       }),
     });

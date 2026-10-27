@@ -19,6 +19,7 @@ import {
   ZoomIn,
   ZoomOut,
   Edit2,
+  FileEdit,
   Bot,
   Palette,
   ChevronDown,
@@ -319,6 +320,54 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     }
     return doc.parsedDoc;
   }, [previewVersion, doc.parsedDoc]);
+
+  // Section-Wise Raw Editing State & Handlers
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editingRawText, setEditingRawText] = useState<string>('');
+
+  const handleStartEditingRaw = useCallback((node: any) => {
+    if (editingNodeId === node.id) {
+      setEditingNodeId(null);
+      return;
+    }
+    let raw = node.raw;
+    if (!raw) {
+      if (typeof node.startLine === 'number' && typeof node.endLine === 'number') {
+        const lines = effectiveContent.split(/\r?\n/);
+        raw = lines.slice(node.startLine, node.endLine + 1).join('\n');
+      } else if (node.type === 'markdown' && node.content) {
+        raw = node.content;
+      }
+    }
+    setEditingRawText(raw || '');
+    setEditingNodeId(node.id);
+  }, [editingNodeId, effectiveContent]);
+
+  const handleSaveRawSection = useCallback((node: any) => {
+    if (!onUpdateContent) return;
+    const lines = effectiveContent.split(/\r?\n/);
+
+    let updatedContent = effectiveContent;
+    if (
+      typeof node.startLine === 'number' &&
+      typeof node.endLine === 'number' &&
+      node.startLine >= 0 &&
+      node.endLine >= node.startLine &&
+      node.endLine < lines.length
+    ) {
+      const before = lines.slice(0, node.startLine);
+      const after = lines.slice(node.endLine + 1);
+      const newLines = editingRawText.split(/\r?\n/);
+      updatedContent = [...before, ...newLines, ...after].join('\n');
+    } else if (node.raw && effectiveContent.includes(node.raw)) {
+      updatedContent = effectiveContent.replace(node.raw, editingRawText);
+    } else if (node.content && effectiveContent.includes(node.content)) {
+      updatedContent = effectiveContent.replace(node.content, editingRawText);
+    }
+
+    onUpdateContent(updatedContent);
+    setEditingNodeId(null);
+  }, [effectiveContent, editingRawText, onUpdateContent]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -1003,7 +1052,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                     : 'p-1 -m-1'
                 }`}
               >
-                {/* Margin Quick Action Icons: Bookmark & Section Note */}
+                {/* Margin Quick Action Icons: Bookmark, Section Note & Edit Raw */}
                 <div className="absolute -left-7 top-2 flex flex-col items-center gap-1.5 z-10">
                   <button
                     onClick={handleToggleThisNodeBookmark}
@@ -1032,7 +1081,40 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                       <MessageSquarePlus className="w-3.5 h-3.5" />
                     </button>
                   )}
+                  {onUpdateContent && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartEditingRaw(node);
+                      }}
+                      className={`p-1 rounded-md transition-all cursor-pointer ${
+                        editingNodeId === node.id
+                          ? 'opacity-100 text-sky-500 bg-[var(--bg-tertiary)]'
+                          : 'opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-sky-500 hover:bg-[var(--bg-tertiary)]'
+                      }`}
+                      title={editingNodeId === node.id ? 'Close Raw Editor' : 'Edit raw Markdown / VMD of this section'}
+                    >
+                      <FileEdit className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
+
+                {/* Top-right Quick Edit Raw hover badge */}
+                {onUpdateContent && editingNodeId !== node.id && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartEditingRaw(node);
+                    }}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)] hover:text-sky-500 bg-[var(--bg-card)]/90 hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-md shadow-xs backdrop-blur-xs z-10 cursor-pointer"
+                    title="Edit raw Markdown / VMD of this section"
+                  >
+                    <FileEdit className="w-3 h-3" />
+                    <span>Edit Raw</span>
+                  </button>
+                )}
 
                 {/* Bookmark Pill if active */}
                 {isBookmarked && (
@@ -1235,72 +1317,153 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                   );
                 })()}
 
-                {/* Render specific widget */}
-                <ErrorBoundary fallbackTitle={`Unable to render ${node.type} block`}>
-                  {(() => {
-                    const nodeAnnotations = doc.annotations.filter((a) => a.node_id === node.id);
-                    switch (node.type) {
-                      case 'snippet':
-                        return <CodeBox node={node as any} />;
-                      case 'stepper':
-                        return (
-                          <Stepper
-                            node={node as any}
-                            annotations={nodeAnnotations}
-                            onDeleteAnnotation={onDeleteAnnotation}
-                          />
-                        );
-                      case 'canvas':
-                        return <CanvasSandbox node={node as any} />;
-                      case 'tabs':
-                        return (
-                          <TabsView
-                            node={node as any}
-                            annotations={nodeAnnotations}
-                            onDeleteAnnotation={onDeleteAnnotation}
-                          />
-                        );
-                      case 'callout':
-                        return (
-                          <CalloutBox
-                            node={node as any}
-                            annotations={nodeAnnotations}
-                            onDeleteAnnotation={onDeleteAnnotation}
-                          />
-                        );
-                      case 'metrics':
-                        return <MetricsGrid node={node as any} />;
-                      case 'quiz':
-                        return <QuizBox node={node as any} />;
-                      case 'mindmap':
-                        return <MindMapView node={node as any} />;
-                      case 'markdown':
-                        return (
-                          <MarkdownRenderer
-                            content={(node as any).content}
-                            annotations={nodeAnnotations}
-                            onDeleteAnnotation={onDeleteAnnotation}
-                            onUpdateContent={(updatedContent) => {
-                              if (!onUpdateContent) return;
-                              if (doc.parsedDoc && doc.parsedDoc.nodes.length === 1 && node.type === 'markdown') {
-                                onUpdateContent(updatedContent);
-                              } else {
-                                const oldContent = (node as any).content;
-                                if (oldContent && doc.content.includes(oldContent)) {
-                                  const newFullDoc = doc.content.replace(oldContent, updatedContent);
-                                  onUpdateContent(newFullDoc);
-                                } else {
+                {/* Render Specific Widget or Section-Wise Raw Editor */}
+                {editingNodeId === node.id ? (
+                  <div className="my-3 p-4 rounded-xl border-2 border-sky-500/60 bg-[var(--bg-card)] shadow-xl z-20 animate-in fade-in zoom-in-95 duration-150 ring-4 ring-sky-500/10">
+                    <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-[var(--border-color)]">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500">
+                          <FileEdit className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-[var(--text-primary)]">Edit Raw Section</span>
+                            <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-color)]">
+                              {node.type}
+                            </span>
+                            {typeof node.startLine === 'number' && typeof node.endLine === 'number' && (
+                              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                                Lines {node.startLine + 1}–{node.endLine + 1}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[var(--text-muted)]">
+                            Edit raw Markdown or VMD syntax for this section. Press Ctrl/⌘ + Enter to save and re-parse.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingNodeId(null)}
+                        className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded cursor-pointer"
+                        title="Close editor (Esc)"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <textarea
+                        value={editingRawText}
+                        onChange={(e) => setEditingRawText(e.target.value)}
+                        rows={Math.min(22, Math.max(6, editingRawText.split('\n').length + 1))}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                            e.preventDefault();
+                            handleSaveRawSection(node);
+                          } else if (e.key === 'Escape') {
+                            setEditingNodeId(null);
+                          }
+                        }}
+                        className="w-full font-mono text-xs leading-relaxed p-3 bg-[var(--bg-primary)] text-[var(--text-primary)] rounded-lg border border-[var(--border-color)] focus:outline-none focus:ring-2 focus:ring-sky-500/50 resize-y selection:bg-sky-500/30 min-h-[120px]"
+                        placeholder="Type raw Markdown / VMD syntax..."
+                        spellCheck={false}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-[var(--border-color)]/60 text-xs">
+                      <div className="flex items-center gap-3 text-[10px] font-mono text-[var(--text-muted)]">
+                        <span><kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)]">Ctrl/⌘ + Enter</kbd> to save</span>
+                        <span><kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)]">Esc</kbd> to cancel</span>
+                        <span>{editingRawText.length} chars • {editingRawText.split('\n').length} lines</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingNodeId(null)}
+                          className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveRawSection(node)}
+                          className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          Save & Re-parse
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <ErrorBoundary fallbackTitle={`Unable to render ${node.type} block`}>
+                    {(() => {
+                      const nodeAnnotations = doc.annotations.filter((a) => a.node_id === node.id);
+                      switch (node.type) {
+                        case 'snippet':
+                          return <CodeBox node={node as any} />;
+                        case 'stepper':
+                          return (
+                            <Stepper
+                              node={node as any}
+                              annotations={nodeAnnotations}
+                              onDeleteAnnotation={onDeleteAnnotation}
+                            />
+                          );
+                        case 'canvas':
+                          return <CanvasSandbox node={node as any} />;
+                        case 'tabs':
+                          return (
+                            <TabsView
+                              node={node as any}
+                              annotations={nodeAnnotations}
+                              onDeleteAnnotation={onDeleteAnnotation}
+                            />
+                          );
+                        case 'callout':
+                          return (
+                            <CalloutBox
+                              node={node as any}
+                              annotations={nodeAnnotations}
+                              onDeleteAnnotation={onDeleteAnnotation}
+                            />
+                          );
+                        case 'metrics':
+                          return <MetricsGrid node={node as any} />;
+                        case 'quiz':
+                          return <QuizBox node={node as any} />;
+                        case 'mindmap':
+                          return <MindMapView node={node as any} />;
+                        case 'markdown':
+                          return (
+                            <MarkdownRenderer
+                              content={(node as any).content}
+                              annotations={nodeAnnotations}
+                              onDeleteAnnotation={onDeleteAnnotation}
+                              onUpdateContent={(updatedContent) => {
+                                if (!onUpdateContent) return;
+                                if (doc.parsedDoc && doc.parsedDoc.nodes.length === 1 && node.type === 'markdown') {
                                   onUpdateContent(updatedContent);
+                                } else {
+                                  const oldContent = (node as any).content;
+                                  if (oldContent && doc.content.includes(oldContent)) {
+                                    const newFullDoc = doc.content.replace(oldContent, updatedContent);
+                                    onUpdateContent(newFullDoc);
+                                  } else {
+                                    onUpdateContent(updatedContent);
+                                  }
                                 }
-                              }
-                            }}
-                          />
-                        );
-                      default:
-                        return null;
-                    }
-                  })()}
-                </ErrorBoundary>
+                              }}
+                            />
+                          );
+                        default:
+                          return null;
+                      }
+                    })()}
+                  </ErrorBoundary>
+                )}
               </div>
             );
           })}

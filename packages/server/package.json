@@ -1,6 +1,6 @@
 {
   "name": "@visualmd/server",
-  "version": "1.0.2600000",
+  "version": "1.0.2600002",
   "type": "module",
   "description": "VisualMD local-first persistence server and CLI daemon",
   "main": "dist/server.js",

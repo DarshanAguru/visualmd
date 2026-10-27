@@ -3,6 +3,9 @@ export type CalloutType = 'insight' | 'perf' | 'warn' | 'danger' | 'tip';
 export interface BaseNode {
   id: string;
   type: string;
+  raw?: string;
+  startLine?: number;
+  endLine?: number;
 }
 
 export interface MarkdownNode extends BaseNode {

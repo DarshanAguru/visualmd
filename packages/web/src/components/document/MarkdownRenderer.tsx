@@ -65,7 +65,16 @@ interface MathItem {
 function normalizeMathForKatex(rawMath: string): string {
   let m = rawMath.trim();
 
-  // 1. Normalize common unicode operators to LaTeX commands
+  // 1. Auto-heal swallowed LaTeX commands (\t, \f, \r) from string/JSON unescaping
+  m = m
+    .replace(/(?<![a-zA-Z\\])ext\{/g, '\\text{')
+    .replace(/(?<![a-zA-Z\\])rac\{/g, '\\frac{')
+    .replace(/(?<![a-zA-Z\\])imes(?![a-zA-Z])/g, '\\times ')
+    .replace(/(?<![a-zA-Z\\])extbf\{/g, '\\textbf{')
+    .replace(/(?<![a-zA-Z\\])extit\{/g, '\\textit{')
+    .replace(/(?<![a-zA-Z\\])qrt\{/g, '\\sqrt{');
+
+  // 2. Normalize common unicode operators to LaTeX commands
   m = m
     .replace(/×/g, '\\times ')
     .replace(/÷/g, '\\div ')
@@ -76,7 +85,7 @@ function normalizeMathForKatex(rawMath: string): string {
     .replace(/±/g, '\\pm ')
     .replace(/·/g, '\\cdot ');
 
-  // 2. Normalize unescaped ampersands: & -> \& (e.g. Net P&L, R&D, S&P, M&A)
+  // 3. Normalize unescaped ampersands: & -> \& (e.g. Net P&L, R&D, S&P, M&A)
   // If not inside an alignment environment (aligned, matrix, cases), any unescaped & is a literal ampersand
   const hasAlignmentEnv = /\\begin\{(?:aligned|matrix|pmatrix|bmatrix|cases|array|split)\}/.test(m);
   if (!hasAlignmentEnv) {
@@ -88,7 +97,7 @@ function normalizeMathForKatex(rawMath: string): string {
     });
   }
 
-  // 3. Normalize unescaped percent sign (e.g. 4.0% -> 4.0\%)
+  // 4. Normalize unescaped percent sign (e.g. 4.0% -> 4.0\%)
   m = m.replace(/(?<!\\)%/g, '\\%');
 
   return m;
@@ -169,11 +178,15 @@ function preprocessMath(markdown: string): { text: string; mathMap: Map<string, 
     return placeholder;
   });
 
+  // 0. Normalize indented math lines (e.g. 2+ spaces before $$ inside or outside lists)
+  // Prevents CommonMark/marked from treating the math block as an indented <pre><code> block
+  protectedText = protectedText.replace(/(^|\n)[ \t]{2,}\$\$([\s\S]*?)\$\$/g, '$1\n\n$$$$$2$$$$\n\n');
+
   // 1. Block math: $$...$$
   protectedText = protectedText.replace(/\$\$([\s\S]*?)\$\$/g, (_match, math) => {
     const key = `VMDMATHBLOCK${counter++}END`;
     mathMap.set(key, { math, isBlock: true });
-    return math.includes('\n') ? `\n\n${key}\n\n` : ` ${key} `;
+    return `\n\n${key}\n\n`;
   });
 
   // 2. LaTeX display math delimiters: \[...\]
@@ -214,8 +227,8 @@ function preprocessMath(markdown: string): { text: string; mathMap: Map<string, 
   });
   protectedText = processedLines.join('\n');
 
-  // 5. Standalone raw LaTeX equation lines: e.g. \text{...} = \frac{...}{...} or \frac{...}{...} = ...
-  protectedText = protectedText.replace(/(^|\n)\s*(\\(?:text|frac|mathbf|mathrm)\{[^{}]+\}[^\n]*=[^\n]+)(?=\n|$)/g, (_match, prefix, math) => {
+  // 5. Standalone raw LaTeX equation lines: e.g. \text{...} = \frac{...}{...} or ext{...} = rac{...}
+  protectedText = protectedText.replace(/(^|\n)\s*((?:\\?(?:text|frac|mathbf|mathrm)|ext|rac)\{[^{}]+\}[^\n]*=[^\n]+)(?=\n|$)/g, (_match, prefix, math) => {
     const key = `VMDMATHBLOCK${counter++}END`;
     mathMap.set(key, { math, isBlock: true });
     return `${prefix}\n\n${key}\n\n`;
@@ -233,6 +246,10 @@ function restoreMath(html: string, mathMap: Map<string, MathItem>): string {
   let result = html;
   for (const [key, item] of mathMap.entries()) {
     const rendered = renderMathExpression(item.math, item.isBlock);
+    // Unwrap from <pre><code> or <code> in case marked wrapped the placeholder inside a code block
+    result = result.replace(new RegExp(`<pre><code>\\s*${key}\\s*<\\/code><\\/pre>`, 'gi'), rendered);
+    result = result.replace(new RegExp(`<code>\\s*${key}\\s*<\\/code>`, 'gi'), rendered);
+
     if (item.isBlock) {
       const pWrapped = new RegExp(`<p>\\s*${key}\\s*<\\/p>`, 'gi');
       if (pWrapped.test(result)) {

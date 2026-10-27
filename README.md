@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: >=22](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
-[![Version: v1.0.2600000](https://img.shields.io/badge/Version-v1.0.2600000-purple.svg)](SECURITY)
+[![Version: v1.0.2600002](https://img.shields.io/badge/Version-v1.0.2600002-purple.svg)](SECURITY)
 ---
 
 ## ⚡ Why VisualMD?
@@ -395,6 +395,13 @@ VisualMD includes a lightweight snapshot VCS for tracking revisions:
 - **Named Checkpoints**: Create named checkpoints before prompting an LLM to revise your document (e.g., *"Before LLM rewrite"*).
 - **1-Click Rollback**: View any historical revision in the slide-out History Drawer and restore it instantly.
 
+### ✏️ Section-Wise "Edit Raw" (In-Place Section Correction & Re-Parsing)
+Never worry about minor typos in complex math formulas (such as missing backslashes in `\frac` or `\text`), unclosed tags, or LaTeX formatting breaking an entire document:
+- **Granular In-Place Editing**: Hover over any section (or click the **Edit Raw** `FileEdit` icon in the left margin or the top-right header) to open an inline raw editor card for that specific section.
+- **Universal Support**: Edit raw syntax for standard Markdown, LaTeX equations, `$SNIPPET$`, `$STEPPER$`, `$TABS$`, `$CALLOUT$`, `$METRICS$`, `$QUIZ$`, and `$MINDMAP$` blocks directly.
+- **Deterministic Replacement**: Uses line-range tracking (`startLine`–`endLine`) and raw node content matching to replace only the selected section in the underlying document.
+- **Keyboard Shortcut**: Press <kbd>Ctrl + Enter</kbd> (or <kbd>⌘ + Enter</kbd>) to save and re-parse instantly with live UI refresh, or <kbd>Esc</kbd> to cancel. No full-page reload or manual file hunting required.
+
 ### 🗑️ Uninstallation
 To completely uninstall VisualMD from your machine:
 ```bash
@@ -517,7 +524,7 @@ visualmd/
 ├── CONTRIBUTING.md                    # Contribution guidelines & developer setup
 ├── SECURITY.md                        # Enterprise security policy & sandbox guarantees
 ├── README.md                          # Main project documentation
-├── package.json                       # Monorepo configuration (version 1.0.2600000)
+├── package.json                       # Monorepo configuration (version 1.0.2600002)
 ├── prompts/                           # Centralized AI skills, prompts & specifications
 │   ├── skill.md                       # Agent skill for Antigravity, Claude, Cursor
 │   ├── VisualMDStandard.md            # Complete VisualMD standard specification
