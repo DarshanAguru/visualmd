@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Folder, DocumentMeta, FullDocument, ThemeType, WorkspaceAsset } from './types';
+import { Folder, DocumentMeta, FullDocument, ThemeType, WorkspaceAsset, WorkspaceMeta } from './types';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { DocumentViewer } from './components/document/DocumentViewer';
 import { AssetViewer } from './components/viewer/AssetViewer';
@@ -42,6 +42,7 @@ export const App: React.FC = () => {
   const [isDocumentLoading, setIsDocumentLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
+  const [workspace, setWorkspace] = useState<WorkspaceMeta | null>(null);
 
   // Modals & Panels
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -182,10 +183,20 @@ export const App: React.FC = () => {
   // Load Folders & Documents with stable ordering & offline cache fallback
   const loadWorkspace = useCallback(async () => {
     try {
-      const [foldersRes, docsRes] = await Promise.all([
+      const [foldersRes, docsRes, wsRes] = await Promise.all([
         fetch('/api/folders'),
         fetch('/api/docs'),
+        fetch('/api/workspace').catch(() => null),
       ]);
+
+      if (wsRes && wsRes.ok) {
+        try {
+          const wsJson = await wsRes.json();
+          if (wsJson.workspace) {
+            setWorkspace(wsJson.workspace);
+          }
+        } catch {}
+      }
 
       if (foldersRes.ok && docsRes.ok) {
         const foldersData = await foldersRes.json();
@@ -937,6 +948,7 @@ export const App: React.FC = () => {
       {/* Collapsible Sidebar */}
       <Sidebar
         isOpen={isSidebarOpen}
+        workspace={workspace}
         onToggleCollapse={() => setIsSidebarOpen((prev) => !prev)}
         folders={folders}
         documents={documents}

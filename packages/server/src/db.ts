@@ -78,13 +78,373 @@ export function isPathInsideDir(childPath: string, parentDir: string): boolean {
   }
 }
 
+export interface WorkspaceInfo {
+  id: string;
+  name: string;
+  path: string;
+  dbPath: string;
+}
+
+export function computeWorkspaceId(dataDir: string): string {
+  const resolved = path.resolve(dataDir);
+  return crypto.createHash('sha256').update(resolved).digest('hex').slice(0, 12);
+}
+
+export function getWorkspaceInfo(dataDir: string, customDbPath?: string): WorkspaceInfo {
+  const resolved = path.resolve(dataDir);
+  const homeDir = os.homedir();
+  const defaultDataDir = path.resolve(homeDir, '.visualmd', 'data');
+  const baseName = path.basename(resolved) || 'workspace';
+  const slug = baseName.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 32) || 'workspace';
+  const id = computeWorkspaceId(resolved);
+
+  let dbPath: string;
+  if (customDbPath) {
+    dbPath = path.resolve(customDbPath);
+  } else if (resolved === defaultDataDir) {
+    // Default home data dir preserves classic ~/.visualmd/visualmd.db for backwards compatibility
+    dbPath = path.join(homeDir, '.visualmd', 'visualmd.db');
+  } else {
+    // Isolated workspace database under ~/.visualmd/workspaces/<slug>-<hash>/visualmd.db
+    const workspaceDir = path.join(homeDir, '.visualmd', 'workspaces', `${slug}-${id}`);
+    if (!fs.existsSync(workspaceDir)) {
+      fs.mkdirSync(workspaceDir, { recursive: true });
+    }
+    dbPath = path.join(workspaceDir, 'visualmd.db');
+  }
+
+  return {
+    id,
+    name: baseName,
+    path: resolved,
+    dbPath,
+  };
+}
+
+export function getWorkspaceDbPath(dataDir: string): string {
+  return getWorkspaceInfo(dataDir).dbPath;
+}
+
+export function isDirectoryEmptyOfDocs(dirPath: string): boolean {
+  try {
+    if (!fs.existsSync(dirPath)) return true;
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue; // ignore hidden files/directories (.git, .vscode, etc.)
+      if (entry.isFile() && isCompatibleDocFile(entry.name)) {
+        return false;
+      }
+      if (entry.isDirectory()) {
+        const subPath = path.join(dirPath, entry.name);
+        if (!isDirectoryEmptyOfDocs(subPath)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export interface WorkspaceRecord {
+  id: string;
+  name: string;
+  path: string;
+  db_path: string;
+  created_at: string;
+  last_accessed: string;
+}
+
+export function registerWorkspaceInGlobalRegistry(info: WorkspaceInfo, customGlobalDbPath?: string): void {
+  try {
+    const homeDir = os.homedir();
+    const globalDbPath = customGlobalDbPath ? path.resolve(customGlobalDbPath) : path.join(homeDir, '.visualmd', 'visualmd.db');
+    const globalDbDir = path.dirname(globalDbPath);
+    if (!fs.existsSync(globalDbDir)) {
+      fs.mkdirSync(globalDbDir, { recursive: true });
+    }
+    const globalDb = new DatabaseSync(globalDbPath);
+    try {
+      globalDb.exec(`
+        PRAGMA journal_mode = WAL;
+        PRAGMA busy_timeout = 5000;
+        CREATE TABLE IF NOT EXISTS workspaces (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          path TEXT UNIQUE NOT NULL,
+          db_path TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          last_accessed TEXT NOT NULL
+        );
+      `);
+
+      const now = new Date().toISOString();
+      const existing = globalDb.prepare('SELECT id, created_at FROM workspaces WHERE id = ? OR path = ?').get(info.id, info.path) as { id: string; created_at: string } | undefined;
+      if (existing) {
+        globalDb.prepare(`
+          UPDATE workspaces SET name = ?, path = ?, db_path = ?, last_accessed = ? WHERE id = ?
+        `).run(info.name, info.path, info.dbPath, now, existing.id);
+      } else {
+        globalDb.prepare(`
+          INSERT INTO workspaces (id, name, path, db_path, created_at, last_accessed)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(info.id, info.name, info.path, info.dbPath, now, now);
+      }
+    } finally {
+      globalDb.close();
+    }
+  } catch (err) {
+    // Non-fatal: do not block workspace initialization if global registry write fails
+    console.warn('[VisualMD] Notice: Could not register workspace in global registry:', err);
+  }
+}
+
+export function getRegisteredWorkspaces(customGlobalDbPath?: string): WorkspaceRecord[] {
+  try {
+    const homeDir = os.homedir();
+    const globalDbPath = customGlobalDbPath ? path.resolve(customGlobalDbPath) : path.join(homeDir, '.visualmd', 'visualmd.db');
+    if (!fs.existsSync(globalDbPath)) return [];
+    const globalDb = new DatabaseSync(globalDbPath);
+    try {
+      const hasTable = globalDb.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='workspaces'`).get();
+      if (!hasTable) return [];
+      return globalDb.prepare('SELECT * FROM workspaces ORDER BY last_accessed DESC').all() as unknown as WorkspaceRecord[];
+    } finally {
+      globalDb.close();
+    }
+  } catch {
+    return [];
+  }
+}
+
+export function migrateLegacyWorkspaceData(
+  targetDb: VisualMDDatabase,
+  dataDir: string,
+  customGlobalDbPath?: string
+): { migratedDocs: number } {
+  const resolvedDataDir = path.resolve(dataDir);
+  const homeDir = os.homedir();
+  const globalDbPath = customGlobalDbPath ? path.resolve(customGlobalDbPath) : path.join(homeDir, '.visualmd', 'visualmd.db');
+
+  // If this workspace DB IS the global DB, no migration needed
+  if (path.resolve(targetDb.dbPath) === path.resolve(globalDbPath)) {
+    return { migratedDocs: 0 };
+  }
+
+  // If already migrated, skip
+  if (targetDb.getSetting('migrated_from_legacy') === 'true') {
+    return { migratedDocs: 0 };
+  }
+
+  if (!fs.existsSync(globalDbPath)) {
+    targetDb.setSetting('migrated_from_legacy', 'true');
+    return { migratedDocs: 0 };
+  }
+
+  let migratedCount = 0;
+  try {
+    const legacyDb = new DatabaseSync(globalDbPath);
+    try {
+      // Check if documents table exists in legacy DB
+      const hasDocsTable = legacyDb.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='documents'`).get();
+      if (!hasDocsTable) {
+        targetDb.setSetting('migrated_from_legacy', 'true');
+        return { migratedDocs: 0 };
+      }
+
+      // Check if file_path column exists
+      const docColumns = (legacyDb.prepare(`PRAGMA table_info(documents)`).all() as Array<{ name: string }>).map((c) => c.name);
+      if (!docColumns.includes('file_path')) {
+        targetDb.setSetting('migrated_from_legacy', 'true');
+        return { migratedDocs: 0 };
+      }
+
+      const legacyDocs = legacyDb.prepare('SELECT * FROM documents WHERE file_path IS NOT NULL').all() as any[];
+      const docsToMigrate = legacyDocs.filter((d) => d.file_path && isPathInsideDir(d.file_path, resolvedDataDir));
+
+      if (docsToMigrate.length > 0) {
+        // Check what additional tables exist in legacy DB
+        const allTables = (legacyDb.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all() as Array<{ name: string }>).map((t) => t.name);
+        const hasFolders = allTables.includes('folders');
+        const hasBookmarks = allTables.includes('bookmarks');
+        const hasAnnotations = allTables.includes('annotations');
+        const hasVersions = allTables.includes('document_versions');
+
+        const migratedDocIds: string[] = [];
+
+        for (const doc of docsToMigrate) {
+          // If folder exists, replicate folder
+          let targetFolderId = null;
+          if (hasFolders && doc.folder_id) {
+            try {
+              const legacyFolder = legacyDb.prepare('SELECT * FROM folders WHERE id = ?').get(doc.folder_id) as any;
+              if (legacyFolder) {
+                targetDb.rawDb.prepare(`
+                  INSERT OR IGNORE INTO folders (id, name, parent_id, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?)
+                `).run(
+                  legacyFolder.id,
+                  legacyFolder.name,
+                  legacyFolder.parent_id,
+                  legacyFolder.created_at || new Date().toISOString(),
+                  legacyFolder.updated_at || new Date().toISOString()
+                );
+                targetFolderId = legacyFolder.id;
+              }
+            } catch {}
+          }
+
+          // Insert or update doc in targetDb preserving exact ID
+          const existingInTarget = targetDb.getDocumentById(doc.id) || targetDb.getDocumentByFilePath(doc.file_path);
+          if (!existingInTarget) {
+            const parsed = parseVisualMD(doc.content);
+            const parsedJson = JSON.stringify(parsed);
+            const finalTitle = doc.title || parsed.title || 'Untitled';
+            targetDb.rawDb.prepare(`
+              INSERT INTO documents (id, folder_id, title, content, parsed_json, file_path, last_read_position, last_read_node, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              doc.id,
+              targetFolderId,
+              finalTitle,
+              doc.content,
+              parsedJson,
+              doc.file_path,
+              doc.last_read_position || 0,
+              doc.last_read_node || null,
+              doc.created_at || new Date().toISOString(),
+              doc.updated_at || new Date().toISOString()
+            );
+
+            // Update FTS index
+            try {
+              targetDb.rawDb.prepare(`INSERT INTO docs_fts (id, title, content) VALUES (?, ?, ?)`).run(doc.id, finalTitle, doc.content);
+            } catch {}
+          }
+
+          // Migrate Bookmarks
+          if (hasBookmarks) {
+            try {
+              const bookmarks = legacyDb.prepare('SELECT * FROM bookmarks WHERE doc_id = ?').all(doc.id) as any[];
+              for (const bm of bookmarks) {
+                try {
+                  targetDb.rawDb.prepare(`
+                    INSERT OR IGNORE INTO bookmarks (id, doc_id, node_id, label, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                  `).run(bm.id || crypto.randomUUID(), doc.id, bm.node_id, bm.label, bm.created_at || new Date().toISOString());
+                } catch {}
+              }
+            } catch {}
+          }
+
+          // Migrate Annotations
+          if (hasAnnotations) {
+            try {
+              const annotations = legacyDb.prepare('SELECT * FROM annotations WHERE doc_id = ?').all(doc.id) as any[];
+              for (const an of annotations) {
+                try {
+                  targetDb.rawDb.prepare(`
+                    INSERT OR IGNORE INTO annotations (id, doc_id, node_id, selected_text, color, note, occurrence_index, table_cell, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  `).run(
+                    an.id || crypto.randomUUID(),
+                    doc.id,
+                    an.node_id,
+                    an.selected_text,
+                    an.color || 'yellow',
+                    an.note,
+                    an.occurrence_index || 0,
+                    an.table_cell || null,
+                    an.created_at || new Date().toISOString()
+                  );
+                } catch {}
+              }
+            } catch {}
+          }
+
+          // Migrate Versions
+          if (hasVersions) {
+            try {
+              const versions = legacyDb.prepare('SELECT * FROM document_versions WHERE doc_id = ? ORDER BY version_number ASC').all(doc.id) as any[];
+              for (const ver of versions) {
+                try {
+                  targetDb.rawDb.prepare(`
+                    INSERT OR IGNORE INTO document_versions (id, doc_id, version_number, title, content, summary, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                  `).run(
+                    ver.id || crypto.randomUUID(),
+                    doc.id,
+                    ver.version_number,
+                    ver.title,
+                    ver.content,
+                    ver.summary || null,
+                    ver.created_at || new Date().toISOString()
+                  );
+                } catch {}
+              }
+            } catch {}
+          }
+
+          migratedDocIds.push(doc.id);
+          migratedCount++;
+        }
+
+        // Clean up migrated docs from legacy DB so they do not duplicate or linger in global DB
+        if (migratedDocIds.length > 0) {
+          try {
+            const placeholders = migratedDocIds.map(() => '?').join(',');
+            legacyDb.prepare(`DELETE FROM documents WHERE id IN (${placeholders})`).run(...migratedDocIds);
+            if (hasBookmarks) {
+              legacyDb.prepare(`DELETE FROM bookmarks WHERE doc_id IN (${placeholders})`).run(...migratedDocIds);
+            }
+            if (hasAnnotations) {
+              legacyDb.prepare(`DELETE FROM annotations WHERE doc_id IN (${placeholders})`).run(...migratedDocIds);
+            }
+            if (hasVersions) {
+              legacyDb.prepare(`DELETE FROM document_versions WHERE doc_id IN (${placeholders})`).run(...migratedDocIds);
+            }
+          } catch {}
+        }
+      }
+    } finally {
+      legacyDb.close();
+    }
+  } catch (err) {
+    console.warn('[VisualMD] Notice: Error during legacy data migration check:', err);
+  } finally {
+    targetDb.setSetting('migrated_from_legacy', 'true');
+  }
+
+  return { migratedDocs: migratedCount };
+}
+
 export class VisualMDDatabase {
   private db: DatabaseSync;
   public dbPath: string;
+  public readonly dataDir: string | null = null;
+  public readonly workspaceInfo: WorkspaceInfo | null = null;
+  public readonly globalRegistryDbPath: string | null = null;
 
-  constructor(customPath?: string) {
+  public get rawDb(): DatabaseSync {
+    return this.db;
+  }
+
+  constructor(customPath?: string, dataDir?: string, customGlobalDbPath?: string) {
+    if (customGlobalDbPath) {
+      this.globalRegistryDbPath = path.resolve(customGlobalDbPath);
+    }
     if (customPath) {
-      this.dbPath = customPath;
+      this.dbPath = path.resolve(customPath);
+      if (dataDir) {
+        this.dataDir = path.resolve(dataDir);
+        this.workspaceInfo = getWorkspaceInfo(dataDir, this.dbPath);
+      }
+    } else if (dataDir) {
+      const info = getWorkspaceInfo(dataDir);
+      this.dbPath = info.dbPath;
+      this.dataDir = info.path;
+      this.workspaceInfo = info;
     } else {
       const homeDir = os.homedir();
       const visualMdDir = path.join(homeDir, '.visualmd');
@@ -94,8 +454,19 @@ export class VisualMDDatabase {
       this.dbPath = path.join(visualMdDir, 'visualmd.db');
     }
 
+    const parentDir = path.dirname(this.dbPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+
     this.db = new DatabaseSync(this.dbPath);
     this.initSchema();
+
+    // If workspace dataDir is set, register workspace in central global registry and run one-time legacy migration
+    if (this.dataDir && this.workspaceInfo) {
+      registerWorkspaceInGlobalRegistry(this.workspaceInfo, customGlobalDbPath);
+      migrateLegacyWorkspaceData(this, this.dataDir, customGlobalDbPath);
+    }
   }
 
   private initSchema() {
@@ -170,6 +541,15 @@ export class VisualMDDatabase {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS workspaces (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        path TEXT UNIQUE NOT NULL,
+        db_path TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_accessed TEXT NOT NULL
       );
     `);
 
@@ -704,8 +1084,9 @@ export class VisualMDDatabase {
       }>;
       for (const doc of allDocs) {
         const resolvedPath = path.resolve(doc.file_path);
-        // Only prune if the file belongs inside this dataDir and does not exist on disk
-        if (isPathInsideDir(resolvedPath, resolvedDataDir) && !fs.existsSync(resolvedPath)) {
+        // Only keep documents that belong inside this dataDir AND exist on disk.
+        // Prune documents that are outside the current dataDir or have been deleted from disk.
+        if (!isPathInsideDir(resolvedPath, resolvedDataDir) || !fs.existsSync(resolvedPath)) {
           this.deleteDocument(doc.id);
           deleted++;
         }

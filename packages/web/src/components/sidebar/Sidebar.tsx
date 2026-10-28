@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, DocumentMeta, WorkspaceAsset } from '../../types';
+import { Folder, DocumentMeta, WorkspaceAsset, WorkspaceMeta } from '../../types';
 import {
   Folder as FolderIcon,
   FolderOpen,
@@ -28,6 +28,7 @@ import { APP_VERSION } from '../../version';
 
 interface SidebarProps {
   isOpen: boolean;
+  workspace?: WorkspaceMeta | null;
   onToggleCollapse: () => void;
   folders: Folder[];
   documents: DocumentMeta[];
@@ -52,6 +53,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
+  workspace,
   onToggleCollapse,
   folders,
   documents,
@@ -414,7 +416,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
         {/* Explorer Header */}
         <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase select-none">
-          <span>Explorer</span>
+          <span className="truncate max-w-[180px]" title={workspace ? `${workspace.name} (${workspace.path})` : 'Explorer'}>
+            {workspace?.name ? `📁 ${workspace.name}` : 'Explorer'}
+          </span>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setIsAddingFolder(!isAddingFolder)}

@@ -4,19 +4,12 @@
 
 | Version | Status | Security Support | Release Notes / Highlights |
 | :--- | :--- | :--- | :--- |
-| **v1.0.2600002** | **Latest (Current)** | :white_check_mark: Actively Supported | Section-wise "Edit Raw" inline editor with deterministic line-slice replacement, automatic swallowed-LaTeX auto-healing (`\text`, `\frac`, `\times`), 4+ space indented math block immunity, MindMap concept hierarchy nesting, and embeddable `<VisualMDCanvas>` SDK |
+| **v1.0.2600004** | **Latest (Current)** | :white_check_mark: Actively Supported | Directory-level SQLite workspace isolation (`~/.visualmd/workspaces/<slug>-<hash>/visualmd.db`), global workspace registry in master DB, zero-crash backward-compatible one-time migration from legacy DB to workspace DBs, empty directory auto-seeding vs clean repository preservation, out-of-directory stale document auto-pruning, and Explorer workspace UI header |
+| **v1.0.2600002** | Previous Release | :white_check_mark: Actively Supported | Section-wise "Edit Raw" inline editor with deterministic line-slice replacement, automatic swallowed-LaTeX auto-healing (`\text`, `\frac`, `\times`), 4+ space indented math block immunity, MindMap concept hierarchy nesting, and embeddable `<VisualMDCanvas>` SDK |
 | **v1.0.2600000** | Previous Release | :white_check_mark: Actively Supported | Embeddable `<VisualMDCanvas>` & modular widget components (`<VisualMDSnippet>`, `<VisualMDStepper>`, `<VisualMDMindMap>`, `<VisualMDQuiz>`), responsive custom styling (`height`, `width`, `overflow`, `filterTypes`), universal `renderVisualMD()` & `<visualmd-canvas>` Web Component for Angular/Vue/Svelte/HTML, and self-contained bundled `canvas.css` |
-| **v1.0.2488** | Previous Release | :white_check_mark: Actively Supported | Interactive Mind Map Engine (full document view +  block widget), compiler auto-healing for unclosed macro blocks, math formula rendering in quiz cards, and AI mind map generator prompt |
-| **v1.0.2486** | Previous Release | :white_check_mark: Actively Supported | KaTeX math auto-healing (unescaped ampersands & absolute value pipes), offline localStorage caching (server-disconnect reading tolerance), reading progress bar, and estimated reading time |
-| **v1.0.2484** | Previous Release | :white_check_mark: Actively Supported | Full KaTeX math engine with nested fraction & unicode operator support, 1-click Markdown table export, rich Quiz explanations, Metrics tooltips, Stepper keyboard navigation, and auto-expanding sidebar search |
-| **v1.0.2482** | Previous Release | :white_check_mark: Actively Supported | Adaptive math & table parser engine preventing table row swallowing, currency false-positive immunity, horizontal scroll containment for wide tables, defensive compiler guards against malformed inputs |
 | **v1.0.248** | Previous Release | :white_check_mark: Actively Supported | In-app native PDF viewer & interactive image viewer, virtual folder companion assets grouping (1-level depth with nested subfolder immunity), direct asset deletion API, and multi-resource Markdown workflow |
-| **v1.0.246** | Previous Release | :white_check_mark: Actively Supported | Foreign key constraint resilience, folder auto-prune immunity on creation, Express exception crash protection, folder cascade disassociation |
-| **v1.0.244** | Previous Release | :white_check_mark: Actively Supported | Streamlined 2-doc tutorial, LeetCode streak calendar with custom threshold, frosted break screensaver, F11 fullscreen |
-| **v1.0.242** | Previous Release | :white_check_mark: Maintained | VCS rollback checkpoints, companion assets serving, FTS5 prefix search |
 | **v1.0.24** | Historical Release | :warning: Upgrade Recommended | Pomodoro interval settings, study tracking, code fence macro immunity |
 | **v1.0.22** | Historical Release | :warning: Upgrade Recommended | Executive 16:9 presentation slide deck, theme contrast polish |
-| **v1.0.2** | Historical Release | :warning: Upgrade Recommended | Case-insensitive tags, checklist quiz options, unescaped percent URI healing |
 | **v1.0.0** | Initial Launch | :warning: Upgrade Recommended | Initial release of VisualMD token-efficient interactive markdown workspace |
 
 ---

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { VisualMDDatabase, isPathInsideDir } from '../dist/db.js';
+import { VisualMDDatabase, isPathInsideDir, getWorkspaceInfo, getWorkspaceDbPath, computeWorkspaceId, isDirectoryEmptyOfDocs, registerWorkspaceInGlobalRegistry, getRegisteredWorkspaces, migrateLegacyWorkspaceData } from '../dist/db.js';
 import { createServer } from '../dist/server.js';
 import { checkDirectoryPermissions, loadUserConfig, saveUserConfig } from '../dist/cli.js';
 import { executeSandboxedCode } from '../dist/sandbox.js';
@@ -652,11 +652,11 @@ test('Server (v1.0.2600002) - Health Version & Prefix FTS5 Search', async () => 
   const baseUrl = `http://localhost:${port}`;
 
   try {
-    // 1. Check health returns version 1.0.2600002
+    // 1. Check health returns version 1.0.2600004
     const healthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(healthRes.status, 200);
     const health = await healthRes.json();
-    assert.equal(health.version, '1.0.2600002');
+    assert.equal(health.version, '1.0.2600004');
 
     // 2. Test prefix search in database
     db.createDocument('Distributed Consensus With Raft', 'Leader election and log replication algorithms in Raft.');
@@ -1447,6 +1447,239 @@ test('Server - Encapsulated Folder Assets (Image & PDF Upload, Folder Assets Iso
     const shmFile = `${tmpDb}-shm`;
     if (fs.existsSync(walFile)) fs.unlinkSync(walFile);
     if (fs.existsSync(shmFile)) fs.unlinkSync(shmFile);
+  }
+});
+
+test('Server (v1.0.2600002) - Directory-Level Workspace Isolation, Switching, and Automatic Pruning', async () => {
+  const tmpBase = path.join(os.tmpdir(), `vmd-workspace-test-${Date.now()}`);
+  const dirA = path.join(tmpBase, 'project-a');
+  const dirB = path.join(tmpBase, 'project-b-empty');
+  const dirC = path.join(tmpBase, 'project-c-existing');
+  const mockExamplesDir = path.join(tmpBase, 'mock-examples');
+
+  fs.mkdirSync(dirA, { recursive: true });
+  fs.mkdirSync(dirB, { recursive: true });
+  fs.mkdirSync(dirC, { recursive: true });
+  fs.mkdirSync(mockExamplesDir, { recursive: true });
+
+  // Create mock example file
+  fs.writeFileSync(path.join(mockExamplesDir, 'Tutorial.vmd'), '# Tutorial\nWelcome to VisualMD');
+
+  // Populate dirA with file
+  fs.writeFileSync(path.join(dirA, 'ProjectA.md'), '# Project A\nSpec document A');
+
+  // Populate dirC with file
+  fs.writeFileSync(path.join(dirC, 'ReportC.vmd'), '# Report C\nQuarterly report C');
+
+  try {
+    // 1. Verify workspace metadata and hashing
+    const infoA = getWorkspaceInfo(dirA);
+    const infoB = getWorkspaceInfo(dirB);
+    assert.ok(infoA.id);
+    assert.ok(infoB.id);
+    assert.notEqual(infoA.id, infoB.id, 'Distinct directories must generate distinct workspace IDs');
+    assert.equal(infoA.id, computeWorkspaceId(dirA), 'Workspace ID must match deterministic SHA256 hash');
+    assert.ok(infoA.dbPath.includes('project-a'), 'Workspace DB path should include slug');
+    assert.ok(infoA.dbPath.endsWith('visualmd.db'), 'Workspace DB file must be named visualmd.db');
+
+    // Default home data directory backward compatibility
+    const defaultDataDir = path.join(os.homedir(), '.visualmd', 'data');
+    const defaultInfo = getWorkspaceInfo(defaultDataDir);
+    assert.equal(defaultInfo.dbPath, path.join(os.homedir(), '.visualmd', 'visualmd.db'));
+
+    // 2. Test isDirectoryEmptyOfDocs
+    assert.equal(isDirectoryEmptyOfDocs(dirB), true, 'dirB is empty of documents');
+    assert.equal(isDirectoryEmptyOfDocs(dirA), false, 'dirA contains ProjectA.md');
+    assert.equal(isDirectoryEmptyOfDocs(dirC), false, 'dirC contains ReportC.vmd');
+
+    // 3. Workspace Database Initialization for dirA
+    const dbA = new VisualMDDatabase(undefined, dirA);
+    assert.equal(dbA.workspaceInfo?.id, infoA.id);
+    dbA.syncDataDirectory(dirA);
+
+    const docsA = dbA.getDocuments();
+    assert.equal(docsA.length, 1);
+    assert.equal(docsA[0].title, 'Project A');
+
+    // 4. Open dirB (empty directory) -> Seeding behavior
+    const dbB = new VisualMDDatabase(undefined, dirB);
+    assert.equal(dbB.workspaceInfo?.id, infoB.id);
+    assert.notEqual(dbA.dbPath, dbB.dbPath, 'dirA and dirB must have completely isolated database files');
+
+    // Before seeding, dbB must have 0 documents (zero bleeding from dirA!)
+    assert.equal(dbB.getDocuments().length, 0, 'dirB must not see any documents from dirA');
+
+    // Seed dirB because it is empty
+    if (isDirectoryEmptyOfDocs(dirB)) {
+      dbB.seedIfEmpty(mockExamplesDir, dirB);
+    }
+    dbB.syncDataDirectory(dirB);
+
+    const docsB = dbB.getDocuments();
+    assert.equal(docsB.length, 1, 'dirB should now contain the seeded example file');
+    assert.equal(docsB[0].title, 'Tutorial');
+
+    // Verify dirA was completely untouched and does NOT have the example file
+    const docsAAfter = dbA.getDocuments();
+    assert.equal(docsAAfter.length, 1);
+    assert.equal(docsAAfter[0].title, 'Project A', 'dirA must remain isolated and untouched');
+
+    // 5. Open dirC (existing directory with documents) -> Must NOT seed examples
+    const dbC = new VisualMDDatabase(undefined, dirC);
+    if (isDirectoryEmptyOfDocs(dirC)) {
+      dbC.seedIfEmpty(mockExamplesDir, dirC);
+    }
+    dbC.syncDataDirectory(dirC);
+
+    const docsC = dbC.getDocuments();
+    assert.equal(docsC.length, 1, 'dirC should only contain its own file');
+    assert.equal(docsC[0].title, 'Report C');
+
+    // 6. Test syncDataDirectory pruning of out-of-directory files (cross-contamination immunity)
+    // If a document with a path outside the active dataDir is present, syncDataDirectory will prune it
+    const foreignDoc = dbC.createDocument('Foreign Leak', '# Leaked', null, path.join(dirA, 'ProjectA.md'));
+    assert.ok(dbC.getDocumentById(foreignDoc.id));
+    const pruneResult = dbC.syncDataDirectory(dirC);
+    assert.equal(pruneResult.deleted, 1, 'Out-of-dir document must be pruned during sync');
+    assert.equal(dbC.getDocumentById(foreignDoc.id), null, 'Foreign document must no longer exist in dbC');
+
+    // 7. Test /api/workspace and /api/health endpoints
+    const app = createServer(dbA, undefined, dirA, true);
+    const server = app.listen(0);
+    const port = server.address().port;
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      const wsRes = await fetch(`${baseUrl}/api/workspace`);
+      assert.equal(wsRes.status, 200);
+      const wsData = await wsRes.json();
+      assert.equal(wsData.ok, true);
+      assert.equal(wsData.workspace.id, infoA.id);
+      assert.equal(wsData.workspace.name, 'project-a');
+      assert.equal(wsData.dataDir, path.resolve(dirA));
+
+      const healthRes = await fetch(`${baseUrl}/api/health`);
+      assert.equal(healthRes.status, 200);
+      const healthData = await healthRes.json();
+      assert.equal(healthData.status, 'ok');
+      assert.equal(healthData.workspace.id, infoA.id);
+      assert.equal(healthData.workspace.name, 'project-a');
+    } finally {
+      server.close();
+    }
+
+    dbA.close();
+    dbB.close();
+    dbC.close();
+
+    // Clean up created workspace DB files
+    for (const info of [infoA, infoB, getWorkspaceInfo(dirC)]) {
+      const wsDir = path.dirname(info.dbPath);
+      if (fs.existsSync(wsDir) && wsDir.includes('.visualmd/workspaces')) {
+        fs.rmSync(wsDir, { recursive: true, force: true });
+      }
+    }
+  } finally {
+    fs.rmSync(tmpBase, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('Server (v1.0.2600004) - Global Workspace Registry, Zero-Crash Backward Compatibility & Legacy Data Migration', async () => {
+  const tmpBase = path.join(os.tmpdir(), `vmd-migration-test-${Date.now()}`);
+  const legacyGlobalDbPath = path.join(tmpBase, 'legacy-global.db');
+  const projectDir = path.join(tmpBase, 'user-project');
+  const externalDir = path.join(tmpBase, 'external-project');
+
+  fs.mkdirSync(projectDir, { recursive: true });
+  fs.mkdirSync(externalDir, { recursive: true });
+
+  const projectFile = path.join(projectDir, 'Guide.md');
+  const externalFile = path.join(externalDir, 'Secret.md');
+  fs.writeFileSync(projectFile, '# Project Guide\nDetailed project documentation.');
+  fs.writeFileSync(externalFile, '# Secret\nExternal note.');
+
+  // 1. Create a simulated legacy global database pre-populated with data
+  const legacyDb = new VisualMDDatabase(legacyGlobalDbPath);
+  const folder = legacyDb.createFolder('Architecture');
+  const docToMigrate = legacyDb.createDocument('Project Guide', '# Project Guide\nDetailed project documentation.', folder.id, projectFile);
+  const externalDoc = legacyDb.createDocument('Secret', '# Secret\nExternal note.', null, externalFile);
+
+  // Add bookmark, annotation, and version snapshot to docToMigrate
+  legacyDb.toggleBookmark(docToMigrate.id, 'node-1', 'Guide Bookmark');
+  legacyDb.addAnnotation(docToMigrate.id, 'node-1', 'Detailed', 'Highlight note', 'amber', 0);
+  legacyDb.createVersion(docToMigrate.id, 'First draft checkpoint', '# Project Guide\nv1 checkpoint', 'Project Guide');
+  legacyDb.close();
+
+  // 2. Initialize a new isolated workspace DB for projectDir, providing legacyGlobalDbPath
+  const isolatedWorkspaceDbPath = path.join(tmpBase, 'isolated-workspace.db');
+  const workspaceDb = new VisualMDDatabase(isolatedWorkspaceDbPath, projectDir, legacyGlobalDbPath);
+
+  try {
+    // 3. Verify one-time legacy migration succeeded
+    const migratedDocs = workspaceDb.getDocuments();
+    assert.equal(migratedDocs.length, 1, 'Only documents inside projectDir must be migrated');
+    assert.equal(migratedDocs[0].id, docToMigrate.id, 'Document ID must be preserved during migration');
+    assert.equal(migratedDocs[0].title, 'Project Guide');
+
+    // Verify folder was migrated
+    const migratedFolders = workspaceDb.getFolders();
+    assert.equal(migratedFolders.length, 1);
+    assert.equal(migratedFolders[0].name, 'Architecture');
+    assert.equal(migratedDocs[0].folder_id, folder.id);
+
+    // Verify bookmarks and annotations migrated
+    const fullDoc = workspaceDb.getDocumentById(docToMigrate.id);
+    assert.ok(fullDoc);
+    assert.equal(fullDoc.bookmarks.length, 1);
+    assert.equal(fullDoc.bookmarks[0].label, 'Guide Bookmark');
+    assert.equal(fullDoc.annotations.length, 1);
+    assert.equal(fullDoc.annotations[0].note, 'Highlight note');
+    assert.equal(fullDoc.annotations[0].color, 'amber');
+
+    // Verify version snapshots migrated
+    const versions = workspaceDb.getVersions(docToMigrate.id);
+    assert.ok(versions.length >= 1);
+    const snap = versions.find((v) => v.summary === 'First draft checkpoint');
+    assert.ok(snap, 'Version snapshot must be preserved');
+
+    // 4. Verify external document was NOT migrated and remains intact in legacy DB
+    const checkLegacy = new VisualMDDatabase(legacyGlobalDbPath);
+    assert.equal(checkLegacy.getDocumentById(externalDoc.id)?.title, 'Secret');
+    // Migrated doc was pruned from legacy DB to prevent duplicate bloat
+    assert.equal(checkLegacy.getDocumentById(docToMigrate.id), null);
+    checkLegacy.close();
+
+    // 5. Verify idempotence: calling migration again migrates 0 documents
+    const repeatResult = migrateLegacyWorkspaceData(workspaceDb, projectDir, legacyGlobalDbPath);
+    assert.equal(repeatResult.migratedDocs, 0, 'Migration must be idempotent and skip if already migrated');
+
+    // 6. Verify global workspace registry
+    const registry = getRegisteredWorkspaces(legacyGlobalDbPath);
+    assert.ok(registry.length >= 1, 'Workspace must be registered in the registry');
+    const entry = registry.find((r) => r.path === path.resolve(projectDir));
+    assert.ok(entry, 'Entry for projectDir must exist in global registry');
+    assert.equal(entry.db_path, path.resolve(isolatedWorkspaceDbPath));
+
+    // 7. Verify /api/workspaces REST endpoint
+    const app = createServer(workspaceDb, undefined, projectDir, true);
+    const server = app.listen(0);
+    const port = server.address().port;
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      const res = await fetch(`${baseUrl}/api/workspaces`);
+      assert.equal(res.status, 200);
+      const data = await res.json();
+      assert.equal(data.ok, true);
+      assert.ok(Array.isArray(data.workspaces));
+      assert.ok(data.workspaces.some((w) => w.path === path.resolve(projectDir)));
+      assert.equal(data.current?.path, path.resolve(projectDir));
+    } finally {
+      server.close();
+    }
+  } finally {
+    workspaceDb.close();
+    fs.rmSync(tmpBase, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
 

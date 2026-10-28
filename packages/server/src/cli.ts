@@ -4,7 +4,7 @@ import os from 'node:os';
 import net from 'node:net';
 import { exec, spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { VisualMDDatabase } from './db.js';
+import { VisualMDDatabase, getWorkspaceDbPath, isDirectoryEmptyOfDocs } from './db.js';
 import { createServer } from './server.js';
 import { SERVER_VERSION } from './version.js';
 import { parseVisualMD } from '../../compiler/dist/index.js';
@@ -425,8 +425,6 @@ Environment Variables:
     process.exit(0);
   });
 
-  const db = new VisualMDDatabase(customDb);
-
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const repoDataDir = path.resolve(__dirname, '../../../data');
   const localDataDir = path.resolve(process.cwd(), 'data');
@@ -484,21 +482,28 @@ Environment Variables:
     checkDirectoryPermissions(dataDir);
   }
 
-  // Look for examples directory to seed
+  // Setup isolated workspace database or custom database path
+  const resolvedDbPath = customDb || getWorkspaceDbPath(dataDir);
+  const db = new VisualMDDatabase(resolvedDbPath, dataDir);
+
+  // Look for examples directory to seed if the target directory is empty of documents
   const possibleExamplesDirs = [
     path.resolve(process.cwd(), 'examples'),
     path.resolve(__dirname, '../../../examples'),
     path.resolve(__dirname, '../../examples'),
   ];
 
-  for (const exDir of possibleExamplesDirs) {
-    if (fs.existsSync(exDir)) {
-      db.seedIfEmpty(exDir, dataDir);
-      break;
+  const isEmptyDir = isDirectoryEmptyOfDocs(dataDir);
+  if (isEmptyDir) {
+    for (const exDir of possibleExamplesDirs) {
+      if (fs.existsSync(exDir)) {
+        db.seedIfEmpty(exDir, dataDir);
+        break;
+      }
     }
   }
 
-  // Sync data directory with database
+  // Sync data directory with database (indexes existing docs and prunes any stale/out-of-dir docs)
   db.syncDataDirectory(dataDir);
 
   let targetDocId: string | null = null;
@@ -599,10 +604,12 @@ Environment Variables:
   const server = app.listen(port, () => {
     const baseUrl = `http://localhost:${port}`;
     const openUrl = targetDocId ? `${baseUrl}/view/${targetDocId}` : baseUrl;
+    const wsName = db.workspaceInfo ? `${db.workspaceInfo.name} [${db.workspaceInfo.id}]` : path.basename(dataDir);
     console.log(`
 ┌────────────────────────────────────────────────────────┐
 │  🚀 VisualMD Engine Running!                           │
 │                                                        │
+│  Workspace:      ${wsName.padEnd(36)} │
 │  Workspace URL:  ${openUrl.padEnd(36)} │
 │  Data Directory: ${dataDir.padEnd(36)} │
 │  Database Path:  ${db.dbPath.padEnd(36)} │

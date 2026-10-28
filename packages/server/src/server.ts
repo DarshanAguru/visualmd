@@ -3,25 +3,12 @@ import cors from 'cors';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { VisualMDDatabase, isCompatibleDocFile } from './db.js';
+import { VisualMDDatabase, isCompatibleDocFile, getWorkspaceInfo, getRegisteredWorkspaces, isPathInsideDir } from './db.js';
 import { parseVisualMD, validateVisualMD } from '../../compiler/dist/index.js';
 import { autoCommitDataChange } from './git.js';
 import { executeSandboxedCode } from './sandbox.js';
 import { SERVER_VERSION } from './version.js';
 
-function isPathInsideDir(targetPath: string, parentDir: string): boolean {
-  try {
-    const parent = path.resolve(parentDir);
-    const target = path.resolve(targetPath);
-    const isCaseInsensitive = process.platform === 'win32' || process.platform === 'darwin';
-    const normParent = isCaseInsensitive ? parent.toLowerCase() : parent;
-    const normTarget = isCaseInsensitive ? target.toLowerCase() : target;
-    const rel = path.relative(normParent, normTarget);
-    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
-  } catch {
-    return false;
-  }
-}
 
 function getSafeFileName(title: string, dir: string): string {
   const base =
@@ -103,11 +90,45 @@ export function createServer(
 
   // Health check
   app.get('/api/health', (_req: Request, res: Response) => {
+    const workspace = db.workspaceInfo || (dataDir ? getWorkspaceInfo(dataDir, db.dbPath) : null);
     res.json({
       status: 'ok',
       version: SERVER_VERSION,
       dbPath: db.dbPath,
       dataDir: dataDir ? path.resolve(dataDir) : null,
+      workspace,
+    });
+  });
+
+  // Workspace information endpoint
+  app.get('/api/workspace', (_req: Request, res: Response) => {
+    const workspace = db.workspaceInfo || (dataDir ? getWorkspaceInfo(dataDir, db.dbPath) : null);
+    res.json({
+      ok: true,
+      workspace,
+      dataDir: dataDir ? path.resolve(dataDir) : null,
+      dbPath: db.dbPath,
+    });
+  });
+
+  // Registered workspaces list endpoint
+  app.get('/api/workspaces', (_req: Request, res: Response) => {
+    const list = getRegisteredWorkspaces(db.globalRegistryDbPath || undefined);
+    const current = db.workspaceInfo || (dataDir ? getWorkspaceInfo(dataDir, db.dbPath) : null);
+    if (current && !list.some((w) => w.id === current.id || w.path === current.path)) {
+      list.unshift({
+        id: current.id,
+        name: current.name,
+        path: current.path,
+        db_path: current.dbPath,
+        created_at: new Date().toISOString(),
+        last_accessed: new Date().toISOString(),
+      });
+    }
+    res.json({
+      ok: true,
+      current,
+      workspaces: list,
     });
   });
 

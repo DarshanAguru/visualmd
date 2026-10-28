@@ -108,3 +108,10 @@ export interface WorkspaceAsset {
   folderId?: string | null;
   folderName?: string | null;
 }
+
+export interface WorkspaceMeta {
+  id: string;
+  name: string;
+  path: string;
+  dbPath?: string;
+}

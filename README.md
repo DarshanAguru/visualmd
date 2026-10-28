@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: >=22](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
-[![Version: v1.0.2600002](https://img.shields.io/badge/Version-v1.0.2600002-purple.svg)](SECURITY)
+[![Version: v1.0.2600004](https://img.shields.io/badge/Version-v1.0.2600004-purple.svg)](SECURITY)
 ---
 
 ## ⚡ Why VisualMD?
@@ -363,16 +363,23 @@ visualmd --port 8080           # Custom port
 - **Frontend Dev Server Port**: Defaults to **`5665`** with live proxy to the running backend engine.
 - **Custom Port Override**: Use `--port <number>` or `-p <number>` to explicitly specify any port.
 
-### 🗂️ Custom Document Directory (`--data-dir`)
-You can store your `.vmd` and `.md` files wherever you choose. VisualMD automatically validates directory write permissions beforehand and saves your choice to `~/.visualmd/config.json` (**"set once and forget"**):
+### 🗂️ Directory-Level Workspace Isolation & Switching (`--data-dir`)
+You can store your `.vmd` and `.md` files wherever you choose. VisualMD provides **production-grade directory-level isolation** so you can easily switch between different repositories and projects:
 ```bash
 # Point to any project or personal folder (persisted automatically)
 visualmd --data-dir ./docs
-visualmd --data-dir ~/Developer/notes
+visualmd --data-dir ~/Developer/project-alpha
+visualmd --data-dir ~/Developer/project-beta
 
 # Reset back to default ~/.visualmd/data whenever desired
 visualmd --reset-dir
 ```
+- **Physical SQLite Isolation**: Each unique directory maps to its own isolated database under `~/.visualmd/workspaces/<slug>-<hash>/visualmd.db` (while default `~/.visualmd/data` maintains backward compatibility with `~/.visualmd/visualmd.db`). Full-text search (FTS5), bookmarks, notes, and version history are 100% scoped to that specific directory with zero data bleeding.
+- **Smart First-Time Seeding vs Clean Repositories**:
+  - If a directory is **empty of documents**, VisualMD automatically seeds starter tutorial files, guides, and interactive bookmarks ("first-time use" experience).
+  - If a directory **already contains existing files**, VisualMD skips example seeding, keeping your project files clean and untouched.
+- **Automatic Stale Pruning & Subdirectory Mapping**: During reactive disk synchronization, documents from prior directories or deleted files are pruned automatically.
+- **Workspace-Aware Explorer UI**: The sidebar Explorer header displays the active workspace directory name (`📁 project-name`), queryable via `GET /api/workspace` and `GET /api/health`.
 > [!TIP]
 > **Production-Clean CLI**: When launched from terminal with or without `--data-dir`, VisualMD runs silently and displays a clean, production-screen banner. The only flag accepted for directory configuration is `--data-dir`. All settings and prompts can also be adjusted inside the app!
 
@@ -524,7 +531,7 @@ visualmd/
 ├── CONTRIBUTING.md                    # Contribution guidelines & developer setup
 ├── SECURITY.md                        # Enterprise security policy & sandbox guarantees
 ├── README.md                          # Main project documentation
-├── package.json                       # Monorepo configuration (version 1.0.2600002)
+├── package.json                       # Monorepo configuration (version 1.0.2600004)
 ├── prompts/                           # Centralized AI skills, prompts & specifications
 │   ├── skill.md                       # Agent skill for Antigravity, Claude, Cursor
 │   ├── VisualMDStandard.md            # Complete VisualMD standard specification

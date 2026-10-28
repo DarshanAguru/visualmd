@@ -703,8 +703,8 @@ Content`;
   assert.equal(Array.isArray(safeDoc.nodes), true);
 });
 
-test('VisualMD Compiler (v1.0.2600002) - Version and Canvas AST Payload Compatibility', () => {
-  assert.equal(COMPILER_VERSION, '1.0.2600002');
+test('VisualMD Compiler (v1.0.2600004) - Version and Canvas AST Payload Compatibility', () => {
+  assert.equal(COMPILER_VERSION, '1.0.2600004');
 
   const richDoc = `# Full System Overview
 $CALLOUT$S?type=insight&title=Core+Principle
