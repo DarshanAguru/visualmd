@@ -8,6 +8,7 @@ interface CalloutBoxProps {
   node: CalloutNode;
   annotations?: Annotation[];
   onDeleteAnnotation?: (id: string) => void;
+  onSelectAnnotation?: (id: string) => void;
 }
 
 const configMap: Record<
@@ -61,6 +62,7 @@ export const CalloutBox: React.FC<CalloutBoxProps> = ({
   node,
   annotations,
   onDeleteAnnotation,
+  onSelectAnnotation,
 }) => {
   const cfg = configMap[node.calloutType] || configMap.insight;
   const Icon = cfg.icon;
@@ -82,6 +84,7 @@ export const CalloutBox: React.FC<CalloutBoxProps> = ({
           content={node.content}
           annotations={annotations}
           onDeleteAnnotation={onDeleteAnnotation}
+          onSelectAnnotation={onSelectAnnotation}
         />
       </div>
     </div>

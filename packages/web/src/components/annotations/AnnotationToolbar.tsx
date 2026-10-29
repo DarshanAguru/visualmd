@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquarePlus, X } from 'lucide-react';
+import { MessageSquarePlus, X, Search, Sparkles } from 'lucide-react';
 
 interface AnnotationToolbarProps {
   onAddAnnotation: (
@@ -23,6 +23,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [noteContent, setNoteContent] = useState('');
   const [chosenColor, setChosenColor] = useState('yellow');
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   useEffect(() => {
     const processSelection = (customPos?: { x: number; y: number } | null) => {
@@ -201,11 +202,43 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           {/* Add Note Button */}
           <button
             onClick={() => setIsAddingNote(true)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-medium border border-[var(--border-color)] transition-colors"
-            title="Attach a sticky note to this selection"
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-medium border border-[var(--border-color)] transition-colors cursor-pointer"
+            title="Attach a note to this selection"
           >
-            <MessageSquarePlus className="w-3.5 h-3.5 text-blue-500" />
+            <MessageSquarePlus className="w-3.5 h-3.5 text-amber-500" />
             <span>Note</span>
+          </button>
+
+          {/* Web Search Button */}
+          <button
+            onClick={() => {
+              const url = `https://www.google.com/search?q=${encodeURIComponent(selectedText)}`;
+              window.open(url, '_blank', 'noopener,noreferrer');
+              setPosition(null);
+            }}
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-medium border border-[var(--border-color)] transition-colors cursor-pointer"
+            title="Search this term on Google"
+          >
+            <Search className="w-3.5 h-3.5 text-sky-500" />
+            <span className="hidden sm:inline">Search</span>
+          </button>
+
+          {/* AI Explain Prompt Button */}
+          <button
+            onClick={() => {
+              const prompt = `Please explain the following concept in depth with intuitive real-world examples and structure the response using VisualMD interactive widgets ($STEPPER$, $CALLOUT$, $TABS$):\n\n"${selectedText}"`;
+              navigator.clipboard.writeText(prompt);
+              setCopiedPrompt(true);
+              setTimeout(() => {
+                setCopiedPrompt(false);
+                setPosition(null);
+              }, 1400);
+            }}
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-medium border border-[var(--border-color)] transition-colors cursor-pointer"
+            title="Copy AI explanation prompt for this selection"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden sm:inline">{copiedPrompt ? 'Copied!' : 'Explain'}</span>
           </button>
 
           <button

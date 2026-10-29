@@ -14,12 +14,14 @@ interface TabsViewProps {
   node: TabsNode;
   annotations?: Annotation[];
   onDeleteAnnotation?: (id: string) => void;
+  onSelectAnnotation?: (id: string) => void;
 }
 
 export const TabsView: React.FC<TabsViewProps> = ({
   node,
   annotations,
   onDeleteAnnotation,
+  onSelectAnnotation,
 }) => {
   const [activeTabIdx, setActiveTabIdx] = useState(0);
 
@@ -74,6 +76,7 @@ export const TabsView: React.FC<TabsViewProps> = ({
                       node={subNode as any}
                       annotations={annotations}
                       onDeleteAnnotation={onDeleteAnnotation}
+                      onSelectAnnotation={onSelectAnnotation}
                     />
                   );
                 case 'canvas':
@@ -85,6 +88,7 @@ export const TabsView: React.FC<TabsViewProps> = ({
                       node={subNode as any}
                       annotations={annotations}
                       onDeleteAnnotation={onDeleteAnnotation}
+                      onSelectAnnotation={onSelectAnnotation}
                     />
                   );
                 case 'metrics':
@@ -98,6 +102,7 @@ export const TabsView: React.FC<TabsViewProps> = ({
                       content={(subNode as any).content}
                       annotations={annotations}
                       onDeleteAnnotation={onDeleteAnnotation}
+                      onSelectAnnotation={onSelectAnnotation}
                     />
                   );
                 default:
@@ -110,6 +115,7 @@ export const TabsView: React.FC<TabsViewProps> = ({
             content={currentTab.content}
             annotations={annotations}
             onDeleteAnnotation={onDeleteAnnotation}
+            onSelectAnnotation={onSelectAnnotation}
           />
         )}
       </div>

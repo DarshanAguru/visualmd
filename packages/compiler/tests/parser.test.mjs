@@ -907,71 +907,20 @@ test('VisualMD Compiler (v1.0.2600006) - Comprehensive Math Scenarios (Degrees, 
   assert.match(unicodeHealed, /\$5 ≤ x ≤ 100\$/);
 });
 
-test('VisualMD Compiler (v1.0.2600006) - Intelligent Mini-LLM Parser (GitHub Alerts, Container Admonitions, Math Environments & Table Auto-Healing)', () => {
-  // 1. GitHub Alert transformation into Callout node
-  const alertDoc = `# Technical Spec
-> [!NOTE] Deployment Architecture
-> Production deployments require multi-region failover.
-> Ensure read replicas are warm.
-
-> [!TIP]
-> Use Redis clustering for session caching.
-
-> [!WARNING] Breaking Change
-> API v1 will be deprecated by Q3.`;
-
-  const parsedAlerts = parseVisualMD(alertDoc);
-  assert.equal(parsedAlerts.title, 'Technical Spec');
-  // Should produce callout nodes
-  const callouts = parsedAlerts.nodes.filter((n) => n.type === 'callout');
-  assert.equal(callouts.length, 3);
-  assert.equal(callouts[0].calloutType, 'insight');
-  assert.equal(callouts[0].title, 'Deployment Architecture');
-  assert.match(callouts[0].content, /Production deployments require multi-region failover/);
-
-  assert.equal(callouts[1].calloutType, 'tip');
-  assert.equal(callouts[1].title, 'Tip');
-  assert.match(callouts[1].content, /Use Redis clustering/);
-
-  assert.equal(callouts[2].calloutType, 'warn');
-  assert.equal(callouts[2].title, 'Breaking Change');
-  assert.match(callouts[2].content, /API v1 will be deprecated/);
-
-  // 2. Container Admonition transformation
-  const containerDoc = `# Container Guide
-:::warning Database Migration
-Ensure you backup before running db:migrate.
-:::`;
-  const parsedContainer = parseVisualMD(containerDoc);
-  const containerCallouts = parsedContainer.nodes.filter((n) => n.type === 'callout');
-  assert.equal(containerCallouts.length, 1);
-  assert.equal(containerCallouts[0].calloutType, 'warn');
-  assert.equal(containerCallouts[0].title, 'Database Migration');
-  assert.match(containerCallouts[0].content, /Ensure you backup/);
-
-  // 3. Raw LaTeX Math Environments without $$ auto-wrapping
-  const mathEnvDoc = `# Calculus Notes
-\\begin{align}
-f(x) &= x^2 + 2x + 1 \\\\
-     &= (x + 1)^2
-\\end{align}`;
-  const healedMath = autoHealVisualMD(mathEnvDoc);
-  assert.match(healedMath, /\$\$\s*\\begin\{align\}[\s\S]*?\\end\{align\}\s*\$\$/);
-
-  // 4. Broken Markdown Table (Missing Separator Row)
-  const brokenTable = `# Metrics Summary
+test('VisualMD Compiler (v1.0.2600006) - Table and Math Preservation (No Spurious Separators)', () => {
+  // Standard Markdown Table with multiple rows must NEVER have spurious separator lines inserted
+  const standardTable = `# Metrics Summary
 | Metric | Q1 Target | Q1 Actual |
+| --- | --- | --- |
 | Revenue | $10M | $12.5M |
-| Retention | 85% | 89% |`;
-  const healedTable = autoHealVisualMD(brokenTable);
-  assert.match(healedTable, /\| Metric \| Q1 Target \| Q1 Actual \|\s*\n\s*\| --- \| --- \| --- \|\s*\n\s*\| Revenue/);
+| Retention | 85% | 89% |
+| Churn | 2% | 1.5% |`;
+  const healedTable = autoHealVisualMD(standardTable);
+  const separatorMatches = healedTable.match(/\| --- \| --- \| --- \|/g);
+  assert.equal(separatorMatches?.length, 1, 'There must be exactly one table header separator');
+
+  const parsed = parseVisualMD(standardTable);
+  assert.equal(parsed.nodes.length, 1);
+  assert.equal(parsed.nodes[0].type, 'markdown');
 });
-
-
-
-
-
-
-
-
 

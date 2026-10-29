@@ -62,6 +62,7 @@ interface DocumentViewerProps {
   onThemeChange: (theme: ThemeType) => void;
   onToggleBookmark: (nodeId: string, label?: string) => void;
   onDeleteAnnotation: (id: string) => void;
+  onSelectAnnotation?: (id: string) => void;
   onAddAnnotation?: (anno: {
     nodeId: string;
     selectedText: string;
@@ -85,8 +86,6 @@ interface DocumentViewerProps {
   fontScaleIndex?: number;
   onFontScaleIndexChange?: (index: number) => void;
   isOffline?: boolean;
-  onSelectAnnotation?: (id: string) => void;
-  activeAnnotationId?: string | null;
 }
 
 interface ThemeOption {
@@ -231,6 +230,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   onThemeChange,
   onToggleBookmark,
   onDeleteAnnotation,
+  onSelectAnnotation,
   onAddAnnotation,
   onOpenNotesDrawer,
   onOpenPromptsModal,
@@ -247,8 +247,6 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   fontScaleIndex: propFontScaleIndex,
   onFontScaleIndexChange: propOnFontScaleIndexChange,
   isOffline = false,
-  onSelectAnnotation,
-  activeAnnotationId,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(doc.title);
@@ -1265,7 +1263,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                           <div
                             key={cn.id}
                             data-note-id={cn.id}
-                            className={`vmd-component-note flex items-start justify-between gap-3 p-3 rounded-xl border bg-[var(--bg-card)] shadow-xs transition-all ${
+                            onClick={() => onSelectAnnotation?.(cn.id)}
+                            className={`vmd-component-note flex items-start justify-between gap-3 p-3 rounded-xl border bg-[var(--bg-card)] shadow-xs transition-all cursor-pointer ${
                               color === 'emerald'
                                 ? 'border-emerald-500/40 bg-emerald-500/5'
                                 : color === 'sky'
@@ -1414,6 +1413,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                               node={node as any}
                               annotations={nodeAnnotations}
                               onDeleteAnnotation={onDeleteAnnotation}
+                              onSelectAnnotation={onSelectAnnotation}
                             />
                           );
                         case 'canvas':
@@ -1424,6 +1424,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                               node={node as any}
                               annotations={nodeAnnotations}
                               onDeleteAnnotation={onDeleteAnnotation}
+                              onSelectAnnotation={onSelectAnnotation}
                             />
                           );
                         case 'callout':
@@ -1432,6 +1433,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                               node={node as any}
                               annotations={nodeAnnotations}
                               onDeleteAnnotation={onDeleteAnnotation}
+                              onSelectAnnotation={onSelectAnnotation}
                             />
                           );
                         case 'metrics':
@@ -1447,7 +1449,6 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                               annotations={nodeAnnotations}
                               onDeleteAnnotation={onDeleteAnnotation}
                               onSelectAnnotation={onSelectAnnotation}
-                              activeAnnotationId={activeAnnotationId}
                               onUpdateContent={(updatedContent) => {
                                 if (!onUpdateContent) return;
                                 if (doc.parsedDoc && doc.parsedDoc.nodes.length === 1 && node.type === 'markdown') {

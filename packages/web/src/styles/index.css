@@ -991,7 +991,8 @@ td.vmd-cell-annotated {
 
 td.vmd-cell-annotated:hover,
 td.vmd-cell-annotated.vmd-note-active,
-.vmd-note-box.vmd-note-active {
+.vmd-note-box.vmd-note-active,
+.vmd-highlight.vmd-note-active {
   background-color: color-mix(in srgb, var(--accent-surface) 90%, transparent) !important;
   outline: 2.5px solid var(--accent) !important;
   outline-offset: -1px;

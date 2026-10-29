@@ -60,6 +60,7 @@ export const DocumentMindMapModal: React.FC<DocumentMindMapModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNode, setSelectedNode] = useState<MindMapItem | null>(null);
   const [copiedSummary, setCopiedSummary] = useState(false);
+  const [copiedAiPrompt, setCopiedAiPrompt] = useState(false);
 
   // Check if document has an embedded custom MindMap block
   const embeddedCustomMindMap = useMemo(() => {
@@ -119,6 +120,33 @@ export const DocumentMindMapModal: React.FC<DocumentMindMapModalProps> = ({
     };
     collect(activeMindMapRoot, 0);
     setCollapsedIds(allIds);
+  };
+
+  const handleCopyAiPrompt = () => {
+    const headings = vmdDoc.nodes
+      .filter((n) => n.type === 'markdown')
+      .map((n) => (n as any).content.match(/^#{1,4}\s+.*$/gm) || [])
+      .flat()
+      .slice(0, 15)
+      .join('\n');
+    const prompt = `Please create a comprehensive, multi-level hierarchical Mind Map for the topic: "${vmdDoc.title}".
+Format the output as a clean VisualMD $MINDMAP$ block:
+
+$MINDMAP$S
+- ${vmdDoc.title}
+  - Pillar 1
+    - Core Concept A
+    - Key Takeaway
+  - Pillar 2
+    - Concept B
+$MINDMAP$E
+
+Here are existing outline headings from the document for guidance:
+${headings || '(None provided)'}
+`;
+    navigator.clipboard.writeText(prompt);
+    setCopiedAiPrompt(true);
+    setTimeout(() => setCopiedAiPrompt(false), 2000);
   };
 
   // Generous Layout calculation to completely prevent card overlap
@@ -516,6 +544,14 @@ export const DocumentMindMapModal: React.FC<DocumentMindMapModalProps> = ({
             title="Collapse branches"
           >
             Collapse
+          </button>
+          <button
+            onClick={handleCopyAiPrompt}
+            className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 font-medium transition-colors cursor-pointer"
+            title="Copy an AI prompt to generate or enhance this mind map hierarchy"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span>{copiedAiPrompt ? 'Prompt Copied!' : 'AI Prompt'}</span>
           </button>
 
           <button

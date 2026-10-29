@@ -8,12 +8,14 @@ interface StepperProps {
   node: StepperNode;
   annotations?: Annotation[];
   onDeleteAnnotation?: (id: string) => void;
+  onSelectAnnotation?: (id: string) => void;
 }
 
 export const Stepper: React.FC<StepperProps> = ({
   node,
   annotations,
   onDeleteAnnotation,
+  onSelectAnnotation,
 }) => {
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
 
@@ -96,6 +98,7 @@ export const Stepper: React.FC<StepperProps> = ({
             content={currentStep.content}
             annotations={annotations}
             onDeleteAnnotation={onDeleteAnnotation}
+            onSelectAnnotation={onSelectAnnotation}
           />
         </div>
       </div>

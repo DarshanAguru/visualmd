@@ -700,103 +700,6 @@ export function autoHealVisualMD(rawText: string = ''): string {
   content = content.replace(/\$([A-Z_]+)\$START(?:\?(.*))?$/gim, '$$$1$S?$2');
   content = content.replace(/\$([A-Z_]+)\$END$/gim, '$$$1$E');
 
-  // Protect code fences from being modified by alert, math, or table heuristics
-  const codeBlocks: string[] = [];
-  content = content.replace(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g, (match) => {
-    const placeholder = `VMDPROTECTEDCODE${codeBlocks.length}END`;
-    codeBlocks.push(match);
-    return placeholder;
-  });
-
-  // Intelligent Context-Aware Heuristics (Mini-LLM Markdown Parser)
-  // 1a. Convert GitHub-flavored Markdown Alerts into native VisualMD $CALLOUT blocks
-  // e.g. > [!NOTE] Title \n > Content -> $CALLOUT$S?type=insight&title=Title\nContent\n$CALLOUT$E
-  content = content.replace(
-    /(?:^|\n)>[ \t]*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO|DANGER|PERF|PERFORMANCE)\](?:[ \t]+([^\r\n]*))?(?:\r?\n)((?:[ \t]*>[ \t]*[^\r\n]*(?:\r?\n|$))*)/gi,
-    (_match, rawType, rawTitle, bodyLinesStr) => {
-      const typeLower = rawType.toLowerCase();
-      let calloutType = 'insight';
-      let defaultTitle = 'Note';
-      if (typeLower === 'tip') {
-        calloutType = 'tip';
-        defaultTitle = 'Tip';
-      } else if (typeLower === 'warn' || typeLower === 'warning') {
-        calloutType = 'warn';
-        defaultTitle = 'Warning';
-      } else if (typeLower === 'caution' || typeLower === 'danger') {
-        calloutType = 'danger';
-        defaultTitle = 'Caution';
-      } else if (typeLower === 'important') {
-        calloutType = 'insight';
-        defaultTitle = 'Important';
-      } else if (typeLower === 'perf' || typeLower === 'performance') {
-        calloutType = 'perf';
-        defaultTitle = 'Performance';
-      }
-      const title = (rawTitle || '').trim() || defaultTitle;
-      const cleanedBody = (bodyLinesStr || '')
-        .split(/\r?\n/)
-        .map((l: string) => l.replace(/^>[ \t]?/, ''))
-        .join('\n')
-        .trim();
-
-      const encodedTitle = encodeURIComponent(title);
-      return `\n\n$CALLOUT$S?type=${calloutType}&title=${encodedTitle}\n${cleanedBody}\n$CALLOUT$E\n\n`;
-    }
-  );
-
-  // 1b. Convert Container Admonitions (:::note, :::tip, :::warning, etc.)
-  content = content.replace(
-    /(?:^|\n):::[ \t]*(note|tip|warning|warn|caution|danger|info|perf|performance)(?:[ \t]+([^\n]*))?\n([\s\S]*?)\n:::[ \t]*(?:\n|$)/gi,
-    (_match, rawType, rawTitle, body) => {
-      const typeLower = rawType.toLowerCase();
-      let calloutType = 'insight';
-      let defaultTitle = 'Note';
-      if (typeLower === 'tip') {
-        calloutType = 'tip';
-        defaultTitle = 'Tip';
-      } else if (typeLower === 'warn' || typeLower === 'warning') {
-        calloutType = 'warn';
-        defaultTitle = 'Warning';
-      } else if (typeLower === 'caution' || typeLower === 'danger') {
-        calloutType = 'danger';
-        defaultTitle = 'Caution';
-      } else if (typeLower === 'perf' || typeLower === 'performance') {
-        calloutType = 'perf';
-        defaultTitle = 'Performance';
-      }
-      const title = (rawTitle || '').trim() || defaultTitle;
-      return `\n\n$CALLOUT$S?type=${calloutType}&title=${encodeURIComponent(title)}\n${body.trim()}\n$CALLOUT$E\n\n`;
-    }
-  );
-
-  // 1c. Intelligent LaTeX Math Environments (auto-wrap \begin{align}...\end{align} in $$ if omitted)
-  const MATH_ENVS = '(?:align\\*?|equation\\*?|gather\\*?|matrix|pmatrix|bmatrix|cases|split|aligned)';
-  const mathEnvRegex = new RegExp(
-    `(^|\\n)(?![^$]*\\$\\$)[ \\t]*(\\\\begin\\{${MATH_ENVS}\\}[\\s\\S]*?\\\\end\\{${MATH_ENVS}\\})`,
-    'g'
-  );
-  content = content.replace(mathEnvRegex, (match, prefix, mathBlock) => {
-    return `${prefix}\n\n$$$$\n${mathBlock.trim()}\n$$$$\n\n`;
-  });
-
-  // 1d. Auto-heal Markdown Tables with missing separator rows
-  // e.g. | Col 1 | Col 2 |\n| Val 1 | Val 2 | -> inserts | --- | --- |
-  content = content.replace(
-    /(^|\n)([ \t]*\|[^\n]+\|[ \t]*)\n([ \t]*\|(?!\s*[-:]+[-| :]*\|)[^\n]+\|[ \t]*)/g,
-    (match, prefix, headerLine, firstDataLine) => {
-      const cols = headerLine.split('|').filter((c: string, idx: number, arr: string[]) => idx > 0 && idx < arr.length - 1);
-      if (cols.length >= 2) {
-        const sep = `| ${cols.map(() => '---').join(' | ')} |`;
-        return `${prefix}${headerLine}\n${sep}\n${firstDataLine}`;
-      }
-      return match;
-    }
-  );
-
-  // Restore protected code fences
-  content = content.replace(/VMDPROTECTEDCODE(\d+)END/g, (_, idx) => codeBlocks[Number(idx)] || '');
-
   // 2. Scan open macro blocks and close dangling ones
   const lines = content.split(/\r?\n/);
   const healedLines: string[] = [];
@@ -888,7 +791,7 @@ export function autoHealVisualMD(rawText: string = ''): string {
   healedContent = healedContent.replace(/(^|\n)[ \t]{2,}\$\$([\s\S]*?)\$\$/g, '$1\n\n$$$$$2$$$$\n\n');
 
   // Heal loose inline math spacing e.g. "$ 55^\circ $" -> "$55^\circ$" or "$ 16\text{–}21 $"
-  healedContent = healedContent.replace(/(?<![\w\\\$])\$\s+([0-9a-zA-Z\\^_{}=<>+\-*/°|–—−±×÷≠≤≥≈√~%, ]+?)\s+\$(?![\w\d])/g, (match, inner) => {
+  healedContent = healedContent.replace(/(?<![\w\\\$])\$\s+([^$\n\r]+?)\s+\$(?![\w\d])/g, (match, inner) => {
     const trimmed = inner.trim();
     if (!trimmed || /^\s*[\d,.]+\s*(?:[kKmMgGtTbB]|bn|mn|tr|cr|lakh|crore|million|billion|trillion)?\s*$/i.test(trimmed)) {
       return match;
