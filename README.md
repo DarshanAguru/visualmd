@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: >=22](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
-[![Version: v1.0.2600006](https://img.shields.io/badge/Version-v1.0.2600006-purple.svg)](SECURITY)
+[![Version: v1.0.2600008](https://img.shields.io/badge/Version-v1.0.2600008-purple.svg)](SECURITY)
 ---
 
 ## ⚡ Why VisualMD?
@@ -531,7 +531,7 @@ visualmd/
 ├── CONTRIBUTING.md                    # Contribution guidelines & developer setup
 ├── SECURITY.md                        # Enterprise security policy & sandbox guarantees
 ├── README.md                          # Main project documentation
-├── package.json                       # Monorepo configuration (version 1.0.2600006)
+├── package.json                       # Monorepo configuration (version 1.0.2600008)
 ├── prompts/                           # Centralized AI skills, prompts & specifications
 │   ├── skill.md                       # Agent skill for Antigravity, Claude, Cursor
 │   ├── VisualMDStandard.md            # Complete VisualMD standard specification

@@ -703,8 +703,8 @@ Content`;
   assert.equal(Array.isArray(safeDoc.nodes), true);
 });
 
-test('VisualMD Compiler (v1.0.2600006) - Version and Canvas AST Payload Compatibility', () => {
-  assert.equal(COMPILER_VERSION, '1.0.2600006');
+test('VisualMD Compiler (v1.0.2600008) - Version and Canvas AST Payload Compatibility', () => {
+  assert.equal(COMPILER_VERSION, '1.0.2600008');
 
   const richDoc = `# Full System Overview
 $CALLOUT$S?type=insight&title=Core+Principle
@@ -869,7 +869,7 @@ Additional context.`;
   assert.match(formulaChild.summary, /\\frac\{/);
 });
 
-test('VisualMD Compiler (v1.0.2600006) - Comprehensive Math Scenarios (Degrees, En-Dashes in Bullets, and Numbered Formulas)', () => {
+test('VisualMD Compiler (v1.0.2600008) - Comprehensive Math Scenarios (Degrees, En-Dashes in Bullets, and Numbered Formulas)', () => {
   // 1. Test healLatexString with degree variations and unicode en-dashes
   assert.equal(healLatexString('55^circ'), '55^\\circ');
   assert.equal(healLatexString('55°'), '55^\\circ ');
@@ -907,7 +907,7 @@ test('VisualMD Compiler (v1.0.2600006) - Comprehensive Math Scenarios (Degrees, 
   assert.match(unicodeHealed, /\$5 ≤ x ≤ 100\$/);
 });
 
-test('VisualMD Compiler (v1.0.2600006) - Table and Math Preservation (No Spurious Separators)', () => {
+test('VisualMD Compiler (v1.0.2600008) - Table and Math Preservation (No Spurious Separators)', () => {
   // Standard Markdown Table with multiple rows must NEVER have spurious separator lines inserted
   const standardTable = `# Metrics Summary
 | Metric | Q1 Target | Q1 Actual |
