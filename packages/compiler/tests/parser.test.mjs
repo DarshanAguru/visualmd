@@ -703,8 +703,8 @@ Content`;
   assert.equal(Array.isArray(safeDoc.nodes), true);
 });
 
-test('VisualMD Compiler (v1.0.2600004) - Version and Canvas AST Payload Compatibility', () => {
-  assert.equal(COMPILER_VERSION, '1.0.2600004');
+test('VisualMD Compiler (v1.0.2600006) - Version and Canvas AST Payload Compatibility', () => {
+  assert.equal(COMPILER_VERSION, '1.0.2600006');
 
   const richDoc = `# Full System Overview
 $CALLOUT$S?type=insight&title=Core+Principle
@@ -867,6 +867,104 @@ Additional context.`;
   assert.equal(formulaChild.type, 'formula');
   assert.match(formulaChild.summary, /\\text\{Monthly Pension\}/);
   assert.match(formulaChild.summary, /\\frac\{/);
+});
+
+test('VisualMD Compiler (v1.0.2600006) - Comprehensive Math Scenarios (Degrees, En-Dashes in Bullets, and Numbered Formulas)', () => {
+  // 1. Test healLatexString with degree variations and unicode en-dashes
+  assert.equal(healLatexString('55^circ'), '55^\\circ');
+  assert.equal(healLatexString('55°'), '55^\\circ ');
+  assert.equal(healLatexString('55\\degree'), '55^\\circ ');
+  assert.equal(healLatexString('16–21'), '16\\text{–}21');
+  assert.equal(healLatexString('16\\text{–}21'), '16\\text{–}21');
+
+  // 2. Test autoHealVisualMD loose spacing normalization for degrees and en-dash ranges
+  const input = 'The angle is $ 55^\\circ $ degrees and angle B is $ 90^circ $. Scores: $ 16\\text{–}21, 21\\text{–}11 $.';
+  const healed = autoHealVisualMD(input);
+  assert.match(healed, /\$55\^\\circ\$/);
+  assert.match(healed, /\$16\\text\{–\}21, 21\\text\{–\}11\$/);
+
+  // 3. Document with bullet item containing inline math starting with digits and en-dash
+  const docText = `# Geometry & Match Records
+- Angle of incidence: $55^\\circ$
+- Loose angle: $ 55^\\circ $
+- Match sets: $16\\text{–}21, 21\\text{–}11, 21\\text{–}12$.
+- Item cost is $50 and shipping is $10.`;
+
+  const doc = parseVisualMD(docText);
+  assert.equal(doc.title, 'Geometry & Match Records');
+  assert.equal(doc.nodes.length, 1);
+  assert.equal(doc.nodes[0].type, 'markdown');
+  assert.match(doc.nodes[0].content, /\$16\\text\{–\}21, 21\\text\{–\}11, 21\\text\{–\}12\$\./);
+
+  // Mind map hierarchy should extract concept bullet nodes safely
+  const mm = buildDocumentMindMap(doc);
+  assert.equal(mm.text, 'Geometry & Match Records');
+  assert.ok(mm.children.length >= 3);
+  // 4. Test math with unicode operators like ±, ≤, ≥, ≠
+  const unicodeMathInput = 'Margin of error is $ 10 ± 2 % $ and limits are $ 5 ≤ x ≤ 100 $.';
+  const unicodeHealed = autoHealVisualMD(unicodeMathInput);
+  assert.match(unicodeHealed, /\$10 ± 2 %\$/);
+  assert.match(unicodeHealed, /\$5 ≤ x ≤ 100\$/);
+});
+
+test('VisualMD Compiler (v1.0.2600006) - Intelligent Mini-LLM Parser (GitHub Alerts, Container Admonitions, Math Environments & Table Auto-Healing)', () => {
+  // 1. GitHub Alert transformation into Callout node
+  const alertDoc = `# Technical Spec
+> [!NOTE] Deployment Architecture
+> Production deployments require multi-region failover.
+> Ensure read replicas are warm.
+
+> [!TIP]
+> Use Redis clustering for session caching.
+
+> [!WARNING] Breaking Change
+> API v1 will be deprecated by Q3.`;
+
+  const parsedAlerts = parseVisualMD(alertDoc);
+  assert.equal(parsedAlerts.title, 'Technical Spec');
+  // Should produce callout nodes
+  const callouts = parsedAlerts.nodes.filter((n) => n.type === 'callout');
+  assert.equal(callouts.length, 3);
+  assert.equal(callouts[0].calloutType, 'insight');
+  assert.equal(callouts[0].title, 'Deployment Architecture');
+  assert.match(callouts[0].content, /Production deployments require multi-region failover/);
+
+  assert.equal(callouts[1].calloutType, 'tip');
+  assert.equal(callouts[1].title, 'Tip');
+  assert.match(callouts[1].content, /Use Redis clustering/);
+
+  assert.equal(callouts[2].calloutType, 'warn');
+  assert.equal(callouts[2].title, 'Breaking Change');
+  assert.match(callouts[2].content, /API v1 will be deprecated/);
+
+  // 2. Container Admonition transformation
+  const containerDoc = `# Container Guide
+:::warning Database Migration
+Ensure you backup before running db:migrate.
+:::`;
+  const parsedContainer = parseVisualMD(containerDoc);
+  const containerCallouts = parsedContainer.nodes.filter((n) => n.type === 'callout');
+  assert.equal(containerCallouts.length, 1);
+  assert.equal(containerCallouts[0].calloutType, 'warn');
+  assert.equal(containerCallouts[0].title, 'Database Migration');
+  assert.match(containerCallouts[0].content, /Ensure you backup/);
+
+  // 3. Raw LaTeX Math Environments without $$ auto-wrapping
+  const mathEnvDoc = `# Calculus Notes
+\\begin{align}
+f(x) &= x^2 + 2x + 1 \\\\
+     &= (x + 1)^2
+\\end{align}`;
+  const healedMath = autoHealVisualMD(mathEnvDoc);
+  assert.match(healedMath, /\$\$\s*\\begin\{align\}[\s\S]*?\\end\{align\}\s*\$\$/);
+
+  // 4. Broken Markdown Table (Missing Separator Row)
+  const brokenTable = `# Metrics Summary
+| Metric | Q1 Target | Q1 Actual |
+| Revenue | $10M | $12.5M |
+| Retention | 85% | 89% |`;
+  const healedTable = autoHealVisualMD(brokenTable);
+  assert.match(healedTable, /\| Metric \| Q1 Target \| Q1 Actual \|\s*\n\s*\| --- \| --- \| --- \|\s*\n\s*\| Revenue/);
 });
 
 

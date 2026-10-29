@@ -3,13 +3,15 @@ import { createPortal } from 'react-dom';
 import { marked } from 'marked';
 import katex from 'katex';
 import { Annotation } from '../../types';
-import { Check, X, Edit3, CornerDownLeft, MessageSquare, Trash2 } from 'lucide-react';
+import { Check, X, Edit3, CornerDownLeft, MessageSquare, Trash2, Pin, Highlighter } from 'lucide-react';
 
 interface MarkdownRendererProps {
   content: string;
   annotations?: Annotation[];
   onDeleteAnnotation?: (id: string) => void;
   onUpdateContent?: (newContent: string) => void;
+  onSelectAnnotation?: (id: string) => void;
+  activeAnnotationId?: string | null;
   inline?: boolean;
   className?: string;
 }
@@ -72,7 +74,10 @@ function normalizeMathForKatex(rawMath: string): string {
     .replace(/(?<![a-zA-Z\\])imes(?![a-zA-Z])/g, '\\times ')
     .replace(/(?<![a-zA-Z\\])extbf\{/g, '\\textbf{')
     .replace(/(?<![a-zA-Z\\])extit\{/g, '\\textit{')
-    .replace(/(?<![a-zA-Z\\])qrt\{/g, '\\sqrt{');
+    .replace(/(?<![a-zA-Z\\])qrt\{/g, '\\sqrt{')
+    .replace(/(?:\^|\^\s*)\bcirc\b/g, '^\\circ')
+    .replace(/°/g, '^\\circ ')
+    .replace(/\\degree\b/g, '^\\circ ');
 
   // 2. Normalize common unicode operators to LaTeX commands
   m = m
@@ -99,6 +104,9 @@ function normalizeMathForKatex(rawMath: string): string {
 
   // 4. Normalize unescaped percent sign (e.g. 4.0% -> 4.0\%)
   m = m.replace(/(?<!\\)%/g, '\\%');
+
+  // 5. Normalize raw unicode dashes (en-dash, em-dash) outside \text{} to \text{–}
+  m = m.replace(/(?<!\\text\{[^{}]*)[–—]/g, (dash) => `\\text{${dash}}`);
 
   return m;
 }
@@ -204,22 +212,39 @@ function preprocessMath(markdown: string): { text: string; mathMap: Map<string, 
   });
 
   // 4. Standard inline math: $...$
-  // In non-table lines, allow | (for absolute values, conditional probability, norms)
-  // In table lines, allow paired or escaped pipes without crossing cell delimiters
+  // Supports standard $math$, math starting with numbers e.g. $55^\circ$, and loose $ math $
+  // while strictly preserving currencies e.g. $50, $1.5M, $100-$200, "$50 and $100"
   const isCurrency = (str: string) =>
     /^\s*[\d,.]+\s*(?:[kKmMgGtTbB]|bn|mn|tr|cr|lakh|crore|million|billion|trillion)?\s*$/i.test(str.trim());
+
+  const isMathCandidate = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return false;
+    if (isCurrency(trimmed)) return false;
+    // Reject plain English word chains between currency symbols (e.g. "50 and $100")
+    if (/\b(?:and|or|to|for|with|from|between|per|each|is|are|was|were)\b/i.test(trimmed) && !/\\[a-zA-Z]+/.test(trimmed)) {
+      return false;
+    }
+    // If it starts with digits, must contain math symbols, LaTeX, operators or variables (e.g. 55^\circ, 2x + 1, 10^{-3}, 16–21)
+    if (/^\d/.test(trimmed)) {
+      return /[\\^_{}=<>+\-*/°|–—−±×÷≠≤≥≈√~%]/.test(trimmed) || /[a-zA-Z]/.test(trimmed);
+    }
+    return true;
+  };
 
   const lines = protectedText.split(/\r?\n/);
   const processedLines = lines.map((line) => {
     const isTableRow = /^\s*\|/.test(line);
+    // Matches $math$ with optional surrounding whitespace when valid math candidate
     const inlineRegex = isTableRow
-      ? /(?<![\w\\])\$(?!\s|\d)((?:\\\||\|[^|\n]+\||[^$\n|])+?)(?<!\s)\$(?![\w\d])/g
-      : /(?<![\w\\])\$(?!\s|\d)([^$\n]+?)(?<!\s)\$(?![\w\d])/g;
+      ? /(?<![\w\\])\$((?:\\\||\|[^|\n]+\||[^$\n|])+?)\$(?![\w\d])/g
+      : /(?<![\w\\])\$([^$\n]+?)\$(?![\w\d])/g;
 
-    return line.replace(inlineRegex, (match, math) => {
-      if (isCurrency(math)) {
+    return line.replace(inlineRegex, (match, rawMath) => {
+      if (!isMathCandidate(rawMath)) {
         return match;
       }
+      const math = rawMath.trim();
       const key = `VMDMATHINLINE${counter++}END`;
       mathMap.set(key, { math, isBlock: false });
       return key;
@@ -802,6 +827,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   annotations,
   onDeleteAnnotation,
   onUpdateContent,
+  onSelectAnnotation,
+  activeAnnotationId,
   inline = false,
   className = '',
 }) => {
@@ -821,6 +848,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     color: string;
     title: string;
     badgeRect: { top: number; left: number; width: number; height: number };
+    isPinned: boolean;
+    isHighlightOnly: boolean;
+    selectedText?: string;
   } | null>(null);
   const [tooltipHeight, setTooltipHeight] = React.useState(140);
   const tooltipRef = React.useRef<HTMLDivElement | null>(null);
@@ -834,6 +864,39 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       }
     }
   }, [activeTooltip]);
+
+  // Synchronize when activeAnnotationId changes (e.g. from NotesDrawer click)
+  React.useEffect(() => {
+    if (!activeAnnotationId || !containerRef.current) return;
+    const targetEl = containerRef.current.querySelector(`[data-note-id="${activeAnnotationId}"]`) as HTMLElement | null;
+    if (targetEl) {
+      const allActive = containerRef.current.querySelectorAll('.vmd-note-active');
+      allActive.forEach((el) => el.classList.remove('vmd-note-active'));
+      targetEl.classList.add('vmd-target-pulse', 'vmd-note-active');
+      setTimeout(() => targetEl.classList.remove('vmd-target-pulse'), 2200);
+
+      const anno = annotations?.find((a) => a.id === activeAnnotationId);
+      if (anno) {
+        const badgeRect = targetEl.getBoundingClientRect();
+        const isNote = Boolean(anno.note && anno.note.trim() !== '' && anno.note !== 'Highlighted snippet');
+        let title = isNote ? 'Note' : 'Highlight';
+        if (anno.selected_text && anno.selected_text.trim().length >= 2) {
+          const snippet = anno.selected_text.trim();
+          title = snippet.length > 25 ? `"${snippet.slice(0, 22)}..."` : `"${snippet}"`;
+        }
+        setActiveTooltip({
+          id: anno.id,
+          note: isNote ? (anno.note || '') : '',
+          color: anno.color || 'yellow',
+          title,
+          badgeRect: { top: badgeRect.top, left: badgeRect.left, width: badgeRect.width, height: badgeRect.height },
+          isPinned: true,
+          isHighlightOnly: !isNote,
+          selectedText: anno.selected_text,
+        });
+      }
+    }
+  }, [activeAnnotationId, annotations]);
 
   React.useEffect(() => {
     if (!containerRef.current) return;
@@ -972,8 +1035,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 
   const handleMouseOver = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    // Match the entire cell if annotated, or the note badge, or the text note box
-    const noteEl = target.closest('td[data-note-id], .vmd-cell-badge, .vmd-note-box') as HTMLElement | null;
+    // Match the entire cell if annotated, or the note badge, or the text note box, or the highlight mark
+    const noteEl = target.closest('td[data-note-id], .vmd-cell-badge, .vmd-note-box, .vmd-highlight') as HTMLElement | null;
     if (!noteEl || !containerRef.current) return;
 
     if (tooltipLeaveTimer.current) {
@@ -984,11 +1047,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     const annoId = noteEl.getAttribute('data-note-id');
     if (!annoId) return;
 
+    // If currently pinned to an item, don't auto-switch unless it's the same item
+    if (activeTooltip?.isPinned && activeTooltip.id !== annoId) return;
+
     const anno = annotations?.find((a) => a.id === annoId);
-    const isNote = Boolean(anno?.note && anno.note !== 'Highlighted snippet');
-    if (!anno || !isNote) return;
+    if (!anno) return;
 
     if (activeTooltip && activeTooltip.id === anno.id) return;
+
+    const isNote = Boolean(anno.note && anno.note.trim() !== '' && anno.note !== 'Highlighted snippet');
 
     // Anchor to noteEl (the exact word/box) if selected_text, else row
     const anchorEl = (anno.table_cell && (!anno.selected_text || anno.selected_text.trim().length < 2))
@@ -996,10 +1063,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       : noteEl;
     const badgeRect = anchorEl.getBoundingClientRect();
 
-    let title = 'Note';
+    let title = isNote ? 'Note' : 'Highlight';
     if (anno.selected_text && anno.selected_text.trim().length >= 2) {
       const snippet = anno.selected_text.trim();
-      title = snippet.length > 25 ? `Note: "${snippet.slice(0, 22)}..."` : `Note: "${snippet}"`;
+      title = snippet.length > 25 ? `"${snippet.slice(0, 22)}..."` : `"${snippet}"`;
     } else if (anno.table_cell) {
       const parts = anno.table_cell.split(':');
       if (parts.length === 3) {
@@ -1011,28 +1078,74 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 
     setActiveTooltip({
       id: anno.id,
-      note: anno.note,
+      note: isNote ? (anno.note || '') : '',
       color: anno.color || 'yellow',
       title,
       badgeRect: { top: badgeRect.top, left: badgeRect.left, width: badgeRect.width, height: badgeRect.height },
+      isPinned: false,
+      isHighlightOnly: !isNote,
+      selectedText: anno.selected_text,
     });
   };
 
   const handleMouseOut = (e: React.MouseEvent<HTMLDivElement>) => {
     const related = e.relatedTarget as HTMLElement | null;
-    if (related && related.closest('.vmd-floating-note-tooltip, td[data-note-id], .vmd-cell-badge, .vmd-note-box')) {
+    if (related && related.closest('.vmd-floating-note-tooltip, td[data-note-id], .vmd-cell-badge, .vmd-note-box, .vmd-highlight')) {
+      return;
+    }
+    // NEVER dismiss on mouse out if the card was pinned!
+    if (activeTooltip?.isPinned) {
       return;
     }
     if (tooltipLeaveTimer.current) {
       clearTimeout(tooltipLeaveTimer.current);
     }
+    // Comfortable 450ms window allows moving mouse from text across screen to delete button without disappearing!
     tooltipLeaveTimer.current = setTimeout(() => {
-      setActiveTooltip(null);
-    }, 150);
+      setActiveTooltip((prev) => (prev?.isPinned ? prev : null));
+    }, 450);
   };
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
+
+    // 0. Click on Highlight or Note -> Pin card & Notify parent for two-way navigation!
+    const noteEl = target.closest('td[data-note-id], .vmd-cell-badge, .vmd-note-box, .vmd-highlight') as HTMLElement | null;
+    if (noteEl) {
+      const annoId = noteEl.getAttribute('data-note-id');
+      if (annoId) {
+        e.stopPropagation();
+        if (onSelectAnnotation) {
+          onSelectAnnotation(annoId);
+        }
+
+        const anno = annotations?.find((a) => a.id === annoId);
+        if (anno) {
+          const anchorEl = (anno.table_cell && (!anno.selected_text || anno.selected_text.trim().length < 2))
+            ? (noteEl.closest('tr') || noteEl)
+            : noteEl;
+          const badgeRect = anchorEl.getBoundingClientRect();
+          const isNote = Boolean(anno.note && anno.note.trim() !== '' && anno.note !== 'Highlighted snippet');
+          let title = isNote ? 'Note' : 'Highlight';
+          if (anno.selected_text && anno.selected_text.trim().length >= 2) {
+            const snippet = anno.selected_text.trim();
+            title = snippet.length > 25 ? `"${snippet.slice(0, 22)}..."` : `"${snippet}"`;
+          }
+
+          setActiveTooltip({
+            id: anno.id,
+            note: isNote ? (anno.note || '') : '',
+            color: anno.color || 'yellow',
+            title,
+            badgeRect: { top: badgeRect.top, left: badgeRect.left, width: badgeRect.width, height: badgeRect.height },
+            isPinned: true,
+            isHighlightOnly: !isNote,
+            selectedText: anno.selected_text,
+          });
+        }
+        return;
+      }
+    }
 
     // 1. Delete Annotation
     const deleteId = target.getAttribute('data-delete-id');
@@ -1354,7 +1467,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               }
             }}
             onMouseLeave={() => {
-              setActiveTooltip(null);
+              if (activeTooltip.isPinned) return;
+              if (tooltipLeaveTimer.current) clearTimeout(tooltipLeaveTimer.current);
+              tooltipLeaveTimer.current = setTimeout(() => {
+                setActiveTooltip((prev) => (prev?.isPinned ? prev : null));
+              }, 400);
             }}
             style={{
               top: pos.top,
@@ -1363,11 +1480,19 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               maxHeight: pos.maxCardHeight,
             }}
           >
-            <div className="relative p-3.5 rounded-2xl bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-color)] shadow-[0_12px_36px_-6px_rgba(0,0,0,0.22),0_0_0_1px_rgba(0,0,0,0.06)] text-xs leading-relaxed backdrop-blur-md flex flex-col">
+            <div
+              className={`relative p-3.5 rounded-2xl bg-[var(--bg-card)] text-[var(--text-primary)] border ${
+                activeTooltip.isPinned
+                  ? 'border-blue-500 shadow-[0_16px_40px_-6px_rgba(59,130,246,0.3),0_0_0_1px_rgba(59,130,246,0.2)]'
+                  : 'border-[var(--border-color)] shadow-[0_12px_36px_-6px_rgba(0,0,0,0.22),0_0_0_1px_rgba(0,0,0,0.06)]'
+              } text-xs leading-relaxed backdrop-blur-md flex flex-col`}
+            >
               {/* Pointer arrow aligning directly on the note's horizontal axis */}
               {pos.isDockedInMargin && (
                 <div
-                  className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rotate-45 bg-[var(--bg-card)] border-t border-r border-[var(--border-color)] z-10"
+                  className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rotate-45 bg-[var(--bg-card)] border-t border-r ${
+                    activeTooltip.isPinned ? 'border-blue-500' : 'border-[var(--border-color)]'
+                  } z-10`}
                 />
               )}
 
@@ -1401,19 +1526,23 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                     className="p-1.5 rounded-lg shrink-0 flex items-center justify-center"
                     style={{ backgroundColor: 'var(--accent-surface)' }}
                   >
-                    <MessageSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    {activeTooltip.isHighlightOnly ? (
+                      <Highlighter className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    ) : (
+                      <MessageSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    )}
                   </div>
                   <div className="flex flex-col min-w-0">
                     <span className="text-[11px] font-bold text-[var(--text-primary)] truncate leading-tight">
                       {activeTooltip.title}
                     </span>
                     <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
-                      Marginal Note
+                      {activeTooltip.isHighlightOnly ? 'Text Highlight' : 'Marginal Note'}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -1421,26 +1550,47 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                       if (onDeleteAnnotation) onDeleteAnnotation(activeTooltip.id);
                       setActiveTooltip(null);
                     }}
-                    className="p-1 text-[var(--text-muted)] hover:text-rose-500 rounded-md hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
-                    title="Delete note"
+                    className="flex items-center gap-1 px-2 py-1 text-rose-500 hover:text-white hover:bg-rose-600 rounded-lg transition-colors cursor-pointer text-[10px] font-semibold border border-rose-500/30"
+                    title={activeTooltip.isHighlightOnly ? 'Delete highlight' : 'Delete note'}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3 h-3" />
+                    <span>Delete</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveTooltip(null);
+                    }}
+                    className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-md hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+                    title="Close"
+                  >
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
 
-              {/* Note Content Body - Utilizes full available Y-axis space instead of small scroll view */}
+              {/* Highlight / Note Content Body */}
               <div
                 style={{ maxHeight: `${pos.maxBodyHeight}px` }}
-                className="pl-1.5 pr-1 text-xs text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed overflow-y-auto selection:bg-blue-500/20"
+                className="pl-1.5 pr-1 text-xs text-[var(--text-primary)] leading-relaxed overflow-y-auto selection:bg-blue-500/20 space-y-2"
               >
-                {activeTooltip.note}
+                {activeTooltip.selectedText && (
+                  <div className="p-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[11px] text-[var(--text-secondary)] italic leading-relaxed">
+                    "{activeTooltip.selectedText}"
+                  </div>
+                )}
+                {!activeTooltip.isHighlightOnly && activeTooltip.note && (
+                  <div className="text-xs text-[var(--text-primary)] whitespace-pre-wrap font-medium">
+                    {activeTooltip.note}
+                  </div>
+                )}
               </div>
 
               {/* Status Footer */}
               <div className="mt-2.5 pt-2 border-t border-[var(--border-color)]/60 flex items-center justify-between text-[9px] text-[var(--text-muted)] font-mono select-none pl-1.5">
-                <span>Hover away to dismiss</span>
-                <span>Esc to close</span>
+                <span>{activeTooltip.isPinned ? '📌 Pinned • Esc or ✕ to close' : 'Click to pin'}</span>
+                <span className="capitalize">{activeTooltip.color}</span>
               </div>
             </div>
           </div>

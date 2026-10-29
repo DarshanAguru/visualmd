@@ -85,6 +85,8 @@ interface DocumentViewerProps {
   fontScaleIndex?: number;
   onFontScaleIndexChange?: (index: number) => void;
   isOffline?: boolean;
+  onSelectAnnotation?: (id: string) => void;
+  activeAnnotationId?: string | null;
 }
 
 interface ThemeOption {
@@ -245,6 +247,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   fontScaleIndex: propFontScaleIndex,
   onFontScaleIndexChange: propOnFontScaleIndexChange,
   isOffline = false,
+  onSelectAnnotation,
+  activeAnnotationId,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(doc.title);
@@ -1442,6 +1446,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                               content={(node as any).content}
                               annotations={nodeAnnotations}
                               onDeleteAnnotation={onDeleteAnnotation}
+                              onSelectAnnotation={onSelectAnnotation}
+                              activeAnnotationId={activeAnnotationId}
                               onUpdateContent={(updatedContent) => {
                                 if (!onUpdateContent) return;
                                 if (doc.parsedDoc && doc.parsedDoc.nodes.length === 1 && node.type === 'markdown') {

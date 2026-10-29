@@ -49,6 +49,7 @@ export const App: React.FC = () => {
   const [isNewDocOpen, setIsNewDocOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isNotesDrawerOpen, setIsNotesDrawerOpen] = useState(false);
+  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('appearance');
@@ -871,6 +872,7 @@ export const App: React.FC = () => {
   };
 
   const handleScrollToAnnotation = (annoId: string, nodeId: string) => {
+    setActiveAnnotationId(annoId);
     const annoEl = document.querySelector(`[data-note-id="${annoId}"]`) as HTMLElement | null;
     if (annoEl) {
       annoEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1129,6 +1131,12 @@ export const App: React.FC = () => {
             fontScaleIndex={fontScaleIndex}
             onFontScaleIndexChange={handleFontScaleIndexChange}
             isOffline={isOffline}
+            onSelectAnnotation={(annoId) => {
+              if (isNotesDrawerOpen) {
+                setActiveAnnotationId(annoId);
+              }
+            }}
+            activeAnnotationId={activeAnnotationId}
           />
 
           {/* Bookmarks & Sticky Notes Drawer - in-flow and resizable */}
@@ -1138,6 +1146,7 @@ export const App: React.FC = () => {
             docTitle={currentDoc.title}
             bookmarks={(currentDoc.bookmarks || []).filter((b) => b.doc_id === currentDoc.id)}
             annotations={(currentDoc.annotations || []).filter((a) => a.doc_id === currentDoc.id)}
+            activeAnnotationId={activeAnnotationId}
             onScrollToNode={handleScrollToNode}
             onScrollToAnnotation={handleScrollToAnnotation}
             onDeleteAnnotation={handleDeleteAnnotation}

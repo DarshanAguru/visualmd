@@ -652,11 +652,11 @@ test('Server (v1.0.2600002) - Health Version & Prefix FTS5 Search', async () => 
   const baseUrl = `http://localhost:${port}`;
 
   try {
-    // 1. Check health returns version 1.0.2600004
+    // 1. Check health returns version 1.0.2600006
     const healthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(healthRes.status, 200);
     const health = await healthRes.json();
-    assert.equal(health.version, '1.0.2600004');
+    assert.equal(health.version, '1.0.2600006');
 
     // 2. Test prefix search in database
     db.createDocument('Distributed Consensus With Raft', 'Leader election and log replication algorithms in Raft.');
